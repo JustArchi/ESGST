@@ -695,7 +695,7 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 	}
 
 	processFilters(filters) {
-		return filters.replace(/(^|\|)\.*(\*|\+)\.*($|\|)/g, '').replace(/\|$/, '');
+		return filters;
 	}
 
 	async elgb_enterGiveaway(giveaway, main, popup, source, callback) {
