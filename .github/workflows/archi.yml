@@ -7,7 +7,7 @@ on:
 env:
   GITHUB_UPSTREAM_BRANCH: 'main'
   GITHUB_UPSTREAM_REPO: 'https://github.com/rafaelgomesxyz/esgst'
-  NODE_JS_VERSION: 14 # Periodically bumped to follow latest LTS | https://github.com/actions/setup-node/issues/26
+  NODE_JS_VERSION: 'lts/*'
 
 jobs:
   update:
@@ -32,9 +32,6 @@ jobs:
     - name: Verify npm
       run: npm -v
 
-    - name: Install pnpm
-      run: npm install -g pnpm
-
     - name: Run automatic deployment
       shell: sh
       run: |
@@ -45,8 +42,8 @@ jobs:
 
         git pull ${{ env.GITHUB_UPSTREAM_REPO }} ${{ env.GITHUB_UPSTREAM_BRANCH }}
 
-        pnpm install
-        pnpm run build
+        npm install --no-progress
+        npm run build-userscript --no-progress
 
         mkdir -p "hosted"
 
