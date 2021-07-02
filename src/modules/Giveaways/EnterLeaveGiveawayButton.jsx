@@ -1,9 +1,11 @@
 import { DOM } from '../../class/DOM';
 import { EventDispatcher } from '../../class/EventDispatcher';
+import { FetchRequest } from '../../class/FetchRequest';
 import { LocalStorage } from '../../class/LocalStorage';
 import { Logger } from '../../class/Logger';
 import { Module } from '../../class/Module';
 import { Popup } from '../../class/Popup';
+import { Scope } from '../../class/Scope';
 import { Session } from '../../class/Session';
 import { Settings } from '../../class/Settings';
 import { Shared } from '../../class/Shared';
@@ -15,7 +17,6 @@ import { common } from '../Common';
 const createElements = common.createElements.bind(common),
 	getFeatureTooltip = common.getFeatureTooltip.bind(common),
 	getValue = common.getValue.bind(common),
-	request = common.request.bind(common),
 	setSetting = common.setSetting.bind(common);
 class GiveawaysEnterLeaveGiveawayButton extends Module {
 	constructor() {
@@ -276,15 +277,12 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 		addButton.classList.add('esgst-hidden');
 		addingButton.classList.remove('esgst-hidden');
 		try {
-			let responseJson = JSON.parse(
-				(
-					await request({
-						data: `xsrf_token=${Session.xsrfToken}&do=entry_insert&code=${giveaway.code}`,
-						method: 'POST',
-						url: '/ajax.php',
-					})
-				).responseText
-			);
+			let responseJson = (
+				await FetchRequest.post('/ajax.php', {
+					data: `xsrf_token=${Session.xsrfToken}&do=entry_insert&code=${giveaway.code}`,
+					doNotQueue: true,
+				})
+			).json;
 			if (responseJson.type === 'success') {
 				removeButton.classList.remove('esgst-hidden');
 			} else {
@@ -314,15 +312,12 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 		removeButton.classList.add('esgst-hidden');
 		removingButton.classList.remove('esgst-hidden');
 		try {
-			let responseJson = JSON.parse(
-				(
-					await request({
-						data: `xsrf_token=${Session.xsrfToken}&do=entry_delete&code=${giveaway.code}`,
-						method: 'POST',
-						url: '/ajax.php',
-					})
-				).responseText
-			);
+			let responseJson = (
+				await FetchRequest.post('/ajax.php', {
+					data: `xsrf_token=${Session.xsrfToken}&do=entry_delete&code=${giveaway.code}`,
+					doNotQueue: true,
+				})
+			).json;
 			if (responseJson.type === 'success') {
 				addButton.classList.remove('esgst-hidden');
 			} else {
@@ -437,7 +432,10 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 				url: giveaway.url,
 			},
 		]).insert(popup.description, 'afterbegin');
-		Shared.esgst.scopes[popup.id].sourceLink = heading.nodes.breadcrumbs[1];
+		const scope = Scope.find(popup.id);
+		if (scope) {
+			scope.sourceLink = heading.nodes.breadcrumbs[1];
+		}
 		if ((Settings.get('cf') && Settings.get('cf_m')) || Settings.get('mm')) {
 			if (Settings.get('cf') && Settings.get('cf_m')) {
 				heading.nodes.outer.appendChild(
@@ -512,7 +510,7 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 		}
 		let description = null;
 		let responseHtml = null;
-		responseHtml = DOM.parse((await request({ method: 'GET', url: giveaway.url })).responseText);
+		responseHtml = (await FetchRequest.get(giveaway.url, { doNotQueue: true })).html;
 		if (mainCallback && !responseHtml.getElementsByClassName('featured__outer-wrap--giveaway')[0]) {
 			mainCallback(true);
 			return;
@@ -583,10 +581,8 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 					name: 'Add Comment',
 					onClick: async () => {
 						if (box.value) {
-							await request({
+							await FetchRequest.post(giveaway.url, {
 								data: `xsrf_token=${Session.xsrfToken}&do=comment_new&description=${box.value}`,
-								method: 'POST',
-								url: giveaway.url,
 							});
 						}
 						popup.close();
@@ -699,20 +695,17 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 	}
 
 	async elgb_enterGiveaway(giveaway, main, popup, source, callback) {
-		const responseText = (
-			await request({
-				data: `xsrf_token=${Session.xsrfToken}&do=entry_insert&code=${giveaway.code}`,
-				method: 'POST',
-				url: '/ajax.php',
-			})
-		).responseText;
 		let responseJson = null;
 		try {
-			responseJson = JSON.parse(responseText);
+			responseJson = (
+				await FetchRequest.post('/ajax.php', {
+					data: `xsrf_token=${Session.xsrfToken}&do=entry_insert&code=${giveaway.code}`,
+					doNotQueue: true,
+				})
+			).json;
 		} catch (e) {
 			Logger.warning(e.message, e.stack);
 			Logger.info(giveaway.code);
-			Logger.info(responseText);
 		}
 		if (!responseJson) {
 			return;
@@ -786,20 +779,17 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 	}
 
 	async elgb_leaveGiveaway(giveaway, main, source, callback) {
-		const responseText = (
-			await request({
-				data: `xsrf_token=${Session.xsrfToken}&do=entry_delete&code=${giveaway.code}`,
-				method: 'POST',
-				url: '/ajax.php',
-			})
-		).responseText;
 		let responseJson = null;
 		try {
-			responseJson = JSON.parse(responseText);
+			responseJson = (
+				await FetchRequest.post('/ajax.php', {
+					data: `xsrf_token=${Session.xsrfToken}&do=entry_delete&code=${giveaway.code}`,
+					doNotQueue: true,
+				})
+			).json;
 		} catch (e) {
 			Logger.warning(e.message, e.stack);
 			Logger.info(giveaway.code);
-			Logger.info(responseText);
 		}
 		if (!responseJson) {
 			return;
@@ -844,8 +834,9 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 
 	elgb_updateButtons() {
 		let giveaway, i, n;
-		for (i = 0, n = this.esgst.scopes.main.giveaways.length; i < n; ++i) {
-			giveaway = this.esgst.scopes.main.giveaways[i];
+		const giveaways = Scope.findData('main', 'giveaways');
+		for (i = 0, n = giveaways.length; i < n; ++i) {
+			giveaway = giveaways[i];
 			if (giveaway.elgbButton && !giveaway.entered) {
 				if (giveaway.error === 'Not Enough Points') {
 					giveaway.error = null;
@@ -854,10 +845,7 @@ class GiveawaysEnterLeaveGiveawayButton extends Module {
 			}
 		}
 		if (Settings.get('ttec')) {
-			this.esgst.modules.giveawaysTimeToEnterCalculator.ttec_calculateTime(
-				this.esgst.scopes.main.giveaways,
-				true
-			);
+			this.esgst.modules.giveawaysTimeToEnterCalculator.ttec_calculateTime(giveaways, true);
 		}
 	}
 }

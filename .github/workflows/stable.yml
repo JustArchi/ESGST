@@ -2,12 +2,11 @@ name: Stable Release
 
 on:
   push:
-    branches:
-      - main
+    tags-ignore:
+      - beta
 
 jobs:
   stable:
-    if: ${{ contains(github.event.commits[0].message, 'Bump version to') }}
     name: Build, test and release
     runs-on: ubuntu-latest
     steps:

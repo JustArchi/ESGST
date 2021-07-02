@@ -1,21 +1,21 @@
 import { Button } from '../../class/Button';
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
+import { Lock } from '../../class/Lock';
 import { Module } from '../../class/Module';
 import { Popup } from '../../class/Popup';
+import { Scope } from '../../class/Scope';
 import { Settings } from '../../class/Settings';
 import { Shared } from '../../class/Shared';
-import { Tabs } from '../../class/Tabs';
 import { Button as ButtonComponent } from '../../components/Button';
 import { PageHeading } from '../../components/PageHeading';
 import { common } from '../Common';
 
 const createElements = common.createElements.bind(common),
-	createLock = common.createLock.bind(common),
 	endless_load = common.endless_load.bind(common),
 	getFeatureTooltip = common.getFeatureTooltip.bind(common),
 	getValue = common.getValue.bind(common),
 	lockAndSaveGiveaways = common.lockAndSaveGiveaways.bind(common),
-	request = common.request.bind(common),
 	setValue = common.setValue.bind(common);
 class GiveawaysGiveawayBookmarks extends Module {
 	constructor() {
@@ -105,6 +105,10 @@ class GiveawaysGiveawayBookmarks extends Module {
 			buttonName: 'ESGST Bookmarked Giveaways',
 			isNotification: true,
 			side: 'left',
+			url: Settings.get('gb_t')
+				? 'https://www.steamgifts.com/account/settings/profile?esgst=gb'
+				: '',
+			openInNewTab: true,
 		});
 
 		button.nodes.outer.classList.add('esgst-hidden');
@@ -115,7 +119,7 @@ class GiveawaysGiveawayBookmarks extends Module {
 
 		if (Settings.get('gb_ue') && this.esgst.enterGiveawayButton) {
 			this.esgst.enterGiveawayButton.onclick = () => {
-				let giveaway = this.esgst.scopes.main.giveaways[0];
+				let giveaway = Scope.findData('main', 'giveaways')[0];
 				if (giveaway && giveaway.gbButton) {
 					if (giveaway.gbButton.index === 3) {
 						// noinspection JSIgnoredPromiseFromCall
@@ -129,7 +133,7 @@ class GiveawaysGiveawayBookmarks extends Module {
 		}
 		if (this.esgst.leaveGiveawayButton) {
 			this.esgst.leaveGiveawayButton.onclick = () => {
-				let giveaway = this.esgst.scopes.main.giveaways[0];
+				let giveaway = Scope.findData('main', 'giveaways')[0];
 				if (giveaway && giveaway.gbButton) {
 					giveaway.gbButton.button.classList.remove('esgst-hidden');
 				}
@@ -257,27 +261,23 @@ class GiveawaysGiveawayBookmarks extends Module {
 				])
 			);
 		}
-		if (button) {
+		if (button && !Settings.get('gb_t')) {
 			button.nodes.outer.addEventListener('click', () => {
-				if (Settings.get('gb_t')) {
-					Tabs.open(`https://www.steamgifts.com/account/settings/profile?esgst=gb`);
-				} else {
-					const popup = new Popup({
-						addScrollable: 'left',
-						isTemp: true,
-					});
-					this.heading = PageHeading.create('gb', [
-						{
-							name: 'ESGST',
-							url: this.esgst.settingsUrl,
-						},
-						{
-							name: 'Bookmarked Giveaways',
-							url: `https://www.steamgifts.com/account/settings/profile?esgst=gb`,
-						},
-					]).insert(popup.description, 'afterbegin');
-					this.gb_loadGibs(bookmarked, popup.description, popup.scrollable, popup);
-				}
+				const popup = new Popup({
+					addScrollable: 'left',
+					isTemp: true,
+				});
+				this.heading = PageHeading.create('gb', [
+					{
+						name: 'ESGST',
+						url: this.esgst.settingsUrl,
+					},
+					{
+						name: 'Bookmarked Giveaways',
+						url: `https://www.steamgifts.com/account/settings/profile?esgst=gb`,
+					},
+				]).insert(popup.description, 'afterbegin');
+				this.gb_loadGibs(bookmarked, popup.description, popup.scrollable, popup);
 			});
 		}
 	}
@@ -423,15 +423,11 @@ class GiveawaysGiveawayBookmarks extends Module {
 			let element = gb.popup.scrollable.children[i].firstElementChild;
 			if (!element.getAttribute('data-esgst')) {
 				let code = element.textContent;
-				element.textContent = DOM.parse(
-					(
-						await request({
-							method: 'GET',
-							queue: true,
-							url: element.getAttribute('href'),
-						})
-					).responseText
-				).getElementsByClassName('featured__heading__medium')[0].textContent;
+				element.textContent = (
+					await FetchRequest.get(element.getAttribute('href'), {
+						queue: true,
+					})
+				).html.getElementsByClassName('featured__heading__medium')[0].textContent;
 				giveaways[code] = {
 					name: element.textContent,
 				};
@@ -443,14 +439,12 @@ class GiveawaysGiveawayBookmarks extends Module {
 	async gb_loadGiveaways(i, n, bookmarked, gbGiveaways, info, popup, callback) {
 		if (i < n) {
 			if (bookmarked[i]) {
-				let response = await request({
-					method: 'GET',
+				let response = await FetchRequest.get(`/giveaway/${bookmarked[i].code}/`, {
 					queue: true,
-					url: `/giveaway/${bookmarked[i].code}/`,
 				});
 				let endTime;
-				let responseHtml = DOM.parse(response.responseText);
-				let url = response.finalUrl;
+				let responseHtml = response.html;
+				let url = response.url;
 				const buildResult = await Shared.common.buildGiveaway(responseHtml, url);
 				if (buildResult) {
 					endTime = 0;
@@ -469,12 +463,13 @@ class GiveawaysGiveawayBookmarks extends Module {
 					createElements(gbGiveaways, 'beforeend', buildResult.html);
 					await endless_load(gbGiveaways.lastElementChild, false, 'gb');
 					if (endTime > 0) {
-						let deleteLock = await createLock('giveawayLock', 300);
+						const lock = new Lock('giveaway', { threshold: 300 });
+						await lock.lock();
 						let giveaways = JSON.parse(getValue('giveaways'));
 						giveaways[bookmarked[i].code].started = true;
 						giveaways[bookmarked[i].code].endTime = endTime;
 						await setValue('giveaways', JSON.stringify(giveaways));
-						deleteLock();
+						await lock.unlock();
 						window.setTimeout(
 							() => this.gb_loadGiveaways(++i, n, bookmarked, gbGiveaways, info, popup, callback),
 							0
@@ -487,13 +482,14 @@ class GiveawaysGiveawayBookmarks extends Module {
 					}
 				} else {
 					if (Settings.get('gb_ui')) {
-						let deleteLock = await createLock('giveawayLock', 300);
+						const lock = new Lock('giveaway', { threshold: 300 });
+						await lock.lock();
 						let giveaways = JSON.parse(getValue('giveaways'));
 						if (giveaways[bookmarked[i].code]) {
 							delete giveaways[bookmarked[i].code].bookmarked;
 						}
 						await setValue('giveaways', JSON.stringify(giveaways));
-						deleteLock();
+						await lock.unlock();
 					}
 					window.setTimeout(
 						() => this.gb_loadGiveaways(++i, n, bookmarked, gbGiveaways, info, popup, callback),
@@ -553,7 +549,8 @@ class GiveawaysGiveawayBookmarks extends Module {
 	}
 
 	async gb_bookmarkGiveaway(giveaway) {
-		let deleteLock = await createLock('giveawayLock', 300);
+		const lock = new Lock('giveaway', { threshold: 300 });
+		await lock.lock();
 		let giveaways = JSON.parse(getValue('giveaways', '{}'));
 		if (!giveaways[giveaway.code]) {
 			giveaways[giveaway.code] = {};
@@ -565,19 +562,20 @@ class GiveawaysGiveawayBookmarks extends Module {
 		giveaways[giveaway.code].bookmarked = true;
 		giveaway.bookmarked = true;
 		await setValue('giveaways', JSON.stringify(giveaways));
-		deleteLock();
+		await lock.unlock();
 		return true;
 	}
 
 	async gb_unbookmarkGiveaway(giveaway) {
-		let deleteLock = await createLock('giveawayLock', 300);
+		const lock = new Lock('giveaway', { threshold: 300 });
+		await lock.lock();
 		let giveaways = JSON.parse(getValue('giveaways', '{}'));
 		if (giveaways[giveaway.code]) {
 			delete giveaways[giveaway.code].bookmarked;
 		}
 		delete giveaway.bookmarked;
 		await setValue('giveaways', JSON.stringify(giveaways));
-		deleteLock();
+		await lock.unlock();
 		return true;
 	}
 }

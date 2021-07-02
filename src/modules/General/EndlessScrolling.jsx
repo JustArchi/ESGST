@@ -1,20 +1,20 @@
-import { Module } from '../../class/Module';
-import { common } from '../Common';
 import IntersectionObserver from 'intersection-observer-polyfill';
-import { Settings } from '../../class/Settings';
-import { Shared } from '../../class/Shared';
 import { DOM } from '../../class/DOM';
 import { EventDispatcher } from '../../class/EventDispatcher';
-import { Events } from '../../constants/Events';
 import { FetchRequest } from '../../class/FetchRequest';
+import { Module } from '../../class/Module';
+import { Scope } from '../../class/Scope';
+import { Settings } from '../../class/Settings';
+import { Shared } from '../../class/Shared';
 import { NotificationBar } from '../../components/NotificationBar';
+import { Events } from '../../constants/Events';
+import { common } from '../Common';
 
 const animateScroll = common.animateScroll.bind(common),
 	checkMissingDiscussions = common.checkMissingDiscussions.bind(common),
 	createElements = common.createElements.bind(common),
 	createHeadingButton = common.createHeadingButton.bind(common),
 	endless_load = common.endless_load.bind(common),
-	request = common.request.bind(common),
 	reverseComments = common.reverseComments.bind(common),
 	setSetting = common.setSetting.bind(common);
 class GeneralEndlessScrolling extends Module {
@@ -211,7 +211,7 @@ class GeneralEndlessScrolling extends Module {
 				for (let i = 0, n = es.mainContext.children.length; i < n; ++i) {
 					es.mainContext.children[0].remove();
 				}
-				this.esgst.scopes.main.reset('comments');
+				Scope.find('main')?.resetData('comments');
 				this.esgst.pagination.firstElementChild.firstElementChild.nextElementSibling.textContent =
 					'0';
 				if (this.esgst.paginationNavigation) {
@@ -406,10 +406,7 @@ class GeneralEndlessScrolling extends Module {
 				false,
 				false,
 				callback,
-				await request({
-					method: 'GET',
-					url: `${this.esgst.searchUrl}${es.nextPage}`,
-				})
+				await FetchRequest.get(`${this.esgst.searchUrl}${es.nextPage}`)
 			);
 		} else if (callback && typeof callback === 'function') {
 			callback();
@@ -417,7 +414,7 @@ class GeneralEndlessScrolling extends Module {
 	}
 
 	async es_getNext(es, refresh, refreshAll, callback, response) {
-		let pagination = DOM.parse(response.responseText).getElementsByClassName('pagination')[0],
+		let pagination = response.html.getElementsByClassName('pagination')[0],
 			context = pagination.previousElementSibling,
 			rows = context.getElementsByClassName('table__rows')[0];
 		if (this.esgst.commentsPath && !context.classList.contains('comments')) {
@@ -836,7 +833,7 @@ class GeneralEndlessScrolling extends Module {
 				type: 'i',
 			},
 		]);
-		let response = await request({ method: 'GET', url: `${this.esgst.searchUrl}${es.pageIndex}` });
+		let response = await FetchRequest.get(`${this.esgst.searchUrl}${es.pageIndex}`);
 		// noinspection JSIgnoredPromiseFromCall
 		this.es_getNext(es, true, false, null, response);
 		if (this.esgst.giveawaysPath && Settings.get('es_rd')) {
@@ -850,8 +847,7 @@ class GeneralEndlessScrolling extends Module {
 		if (this.esgst.pinnedGiveaways) {
 			createElements(this.esgst.pinnedGiveaways, 'atinner', [
 				...Array.from(
-					DOM.parse(response.responseText).getElementsByClassName('pinned-giveaways__outer-wrap')[0]
-						.childNodes
+					response.html.getElementsByClassName('pinned-giveaways__outer-wrap')[0].childNodes
 				).map((x) => {
 					return {
 						context: x,
@@ -879,7 +875,7 @@ class GeneralEndlessScrolling extends Module {
 			},
 		]);
 		let page = es.reverseScrolling ? es.pageBase - 1 : es.pageBase + 1,
-			response = await request({ method: 'GET', url: `${this.esgst.searchUrl}${page}` });
+			response = await FetchRequest.get(`${this.esgst.searchUrl}${page}`);
 		// noinspection JSIgnoredPromiseFromCall
 		this.es_getNext(es, true, page, null, response);
 		const promises = [];
@@ -892,7 +888,7 @@ class GeneralEndlessScrolling extends Module {
 					true,
 					page,
 					null,
-					await request({ method: 'GET', url: `${this.esgst.searchUrl}${page}` })
+					await FetchRequest.get(`${this.esgst.searchUrl}${page}`)
 				)
 			);
 		}
@@ -929,8 +925,7 @@ class GeneralEndlessScrolling extends Module {
 		if (this.esgst.pinnedGiveaways) {
 			createElements(this.esgst.pinnedGiveaways, 'atinner', [
 				...Array.from(
-					DOM.parse(response.responseText).getElementsByClassName('pinned-giveaways__outer-wrap')[0]
-						.childNodes
+					response.html.getElementsByClassName('pinned-giveaways__outer-wrap')[0].childNodes
 				).map((x) => {
 					return {
 						context: x,
@@ -985,9 +980,7 @@ class GeneralEndlessScrolling extends Module {
 					Data += `${Values[I].getAttribute('name')}=${Values[I].value}${I < N - 1 ? '&' : ''}`;
 				}
 				Loading.classList.toggle('is-hidden');
-				let responseJson = JSON.parse(
-					(await request({ data: Data, method: 'POST', url: '/ajax.php' })).responseText
-				);
+				let responseJson = (await FetchRequest.post('/ajax.php', { data: Data })).json;
 				if (responseJson.type === 'success') {
 					Context.classList.add('is-faded');
 					Complete.classList.toggle('is-hidden');

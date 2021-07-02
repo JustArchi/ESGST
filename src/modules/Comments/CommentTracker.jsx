@@ -1,10 +1,13 @@
 import { Button } from '../../class/Button';
-import { Module } from '../../class/Module';
-import { Shared } from '../../class/Shared';
-import { Settings } from '../../class/Settings';
 import { DOM } from '../../class/DOM';
-import { Session } from '../../class/Session';
+import { FetchRequest } from '../../class/FetchRequest';
 import { LocalStorage } from '../../class/LocalStorage';
+import { Lock } from '../../class/Lock';
+import { Module } from '../../class/Module';
+import { Scope } from '../../class/Scope';
+import { Session } from '../../class/Session';
+import { Settings } from '../../class/Settings';
+import { Shared } from '../../class/Shared';
 import { Tabs } from '../../class/Tabs';
 
 class CommentsCommentTracker extends Module {
@@ -292,17 +295,6 @@ class CommentsCommentTracker extends Module {
 					code = url.match(new RegExp(`/${key.slice(0, -1)}/(.+?)(/.*)?$`));
 					if (code) {
 						code = code[1];
-						if (
-							Settings.get('ust') &&
-							key === 'tickets' &&
-							(!comments[code] || !comments[code].sent) &&
-							match
-								.getElementsByClassName('table__column__secondary-link')[0]
-								.textContent.trim()
-								.match(/Request\sNew\sWinner|User\sReport/)
-						) {
-							this.esgst.modules.usersUserSuspensionTracker.ust_addCheckbox(code, match);
-						}
 						if (Settings.get('gdttt') || Settings.get('ct')) {
 							if (comments[code]) {
 								if (Settings.get('ct_s')) {
@@ -324,13 +316,10 @@ class CommentsCommentTracker extends Module {
 								diff = count;
 							}
 							let discussion = null;
-							for (
-								j = this.esgst.scopes.main.discussions.length - 1;
-								j > -1 && this.esgst.scopes.main.discussions[j].code !== code;
-								--j
-							) {}
+							const discussions = Scope.findData('main', 'discussions');
+							for (j = discussions.length - 1; j > -1 && discussions[j].code !== code; --j) {}
 							if (j > -1) {
-								discussion = this.esgst.scopes.main.discussions[j];
+								discussion = discussions[j];
 							}
 							if (key === 'discussions' && diff > 0 && discussion) {
 								discussion.unread = true;
@@ -360,13 +349,6 @@ class CommentsCommentTracker extends Module {
 		) {
 			this.esgst.modules.discussionsDiscussionFilters.filters_filter(this.esgst.df, false, endless);
 		}
-		if (this.esgst.ustButton) {
-			if (this.esgst.modules.usersUserSuspensionTracker.numTickets > 0) {
-				this.esgst.ustButton.classList.remove('esgst-hidden');
-			} else {
-				this.esgst.ustButton.classList.add('esgst-hidden');
-			}
-		}
 	}
 
 	async ct_getComments(count, comments, index, goToUnread, markRead, markUnread, endless) {
@@ -374,9 +356,10 @@ class CommentsCommentTracker extends Module {
 		if (goToUnread) {
 			found = await this.ct_checkComments(count, comments, index, true, false, false, endless);
 		} else {
-			let deleteLock;
+			let lock;
 			if (!endless) {
-				deleteLock = await Shared.common.createLock('commentLock', 300);
+				lock = new Lock('comment', { threshold: 300 });
+				await lock.lock();
 			}
 			found = await this.ct_checkComments(
 				count,
@@ -387,8 +370,8 @@ class CommentsCommentTracker extends Module {
 				markUnread,
 				endless
 			);
-			if (deleteLock) {
-				deleteLock();
+			if (lock) {
+				await lock.unlock();
 			}
 		}
 		return found;
@@ -639,7 +622,8 @@ class CommentsCommentTracker extends Module {
 	async ct_markCommentRead(comment, comments, save) {
 		let count;
 		if (save) {
-			let deleteLock = await Shared.common.createLock('commentLock', 300);
+			const lock = new Lock('comment', { threshold: 300 });
+			await lock.lock();
 			comments = JSON.parse(Shared.common.getValue(comment.type));
 			if (
 				comment.id &&
@@ -651,7 +635,7 @@ class CommentsCommentTracker extends Module {
 			}
 			comments[comment.code].readComments[comment.id] = comment.timestamp;
 			await Shared.common.setValue(comment.type, JSON.stringify(comments));
-			deleteLock();
+			await lock.unlock();
 			if ((comment.isOp && Settings.get('ct_fop')) || (!comment.isOp && Settings.get('ct_f'))) {
 				comment.comment.classList.add('esgst-ct-comment-read');
 			}
@@ -676,7 +660,8 @@ class CommentsCommentTracker extends Module {
 	async ct_markCommentUnread(comment, comments, save) {
 		let count;
 		if (save) {
-			let deleteLock = await Shared.common.createLock('commentLock', 300);
+			const lock = new Lock('comment', { threshold: 300 });
+			await lock.lock();
 			comments = JSON.parse(Shared.common.getValue(comment.type));
 			if (comments[comment.code].readComments[comment.id]) {
 				delete comments[comment.code].readComments[comment.id];
@@ -686,7 +671,7 @@ class CommentsCommentTracker extends Module {
 				}
 			}
 			await Shared.common.setValue(comment.type, JSON.stringify(comments));
-			deleteLock();
+			await lock.unlock();
 			if ((comment.isOp && Settings.get('ct_fop')) || (!comment.isOp && Settings.get('ct_f'))) {
 				comment.comment.classList.remove('esgst-ct-comment-read');
 			}
@@ -737,7 +722,7 @@ class CommentsCommentTracker extends Module {
 		DOM.insert(button, 'atinner', <i className="fa fa-circle-o-notch fa-spin"></i>);
 		await this.ct_getComments(
 			0,
-			this.esgst.scopes.main.comments,
+			Scope.findData('main', 'comments'),
 			comment.index,
 			false,
 			true,
@@ -779,7 +764,7 @@ class CommentsCommentTracker extends Module {
 		DOM.insert(button, 'atinner', <i className="fa fa-circle-o-notch fa-spin"></i>);
 		await this.ct_getComments(
 			0,
-			this.esgst.scopes.main.comments,
+			Scope.findData('main', 'comments'),
 			comment.index,
 			false,
 			false,
@@ -838,7 +823,7 @@ class CommentsCommentTracker extends Module {
 		button.innerHTML = '';
 		this.ct_addUnreadCommentButton(button, comment);
 		// noinspection JSIgnoredPromiseFromCall
-		this.ct_getComments(0, this.esgst.scopes.main.comments, null, true);
+		this.ct_getComments(0, Scope.findData('main', 'comments'), null, true);
 	}
 
 	ct_addUnreadCommentButton(button, comment) {
@@ -909,10 +894,8 @@ class CommentsCommentTracker extends Module {
 	}
 
 	async ct_markMessagesRead(key, markRead, url, event) {
-		await Shared.common.request({
+		await FetchRequest.post(url, {
 			data: `xsrf_token=${Session.xsrfToken}&do=${key}`,
-			method: 'POST',
-			url,
 		});
 		await this.ct_markCommentsRead(markRead);
 		this.ct_completeInboxRead(event.currentTarget);
@@ -931,7 +914,7 @@ class CommentsCommentTracker extends Module {
 		DOM.insert(goToUnread, 'atinner', <i className="fa fa-circle-o-notch fa-spin"></i>);
 		const found = await this.ct_getComments(
 			0,
-			this.esgst.scopes.main.comments,
+			Scope.findData('main', 'comments'),
 			null,
 			true,
 			false,
@@ -945,13 +928,13 @@ class CommentsCommentTracker extends Module {
 
 	async ct_markCommentsRead(markRead) {
 		DOM.insert(markRead, 'atinner', <i className="fa fa-circle-o-notch fa-spin"></i>);
-		await this.ct_getComments(0, this.esgst.scopes.main.comments, null, false, true, false);
+		await this.ct_getComments(0, Scope.findData('main', 'comments'), null, false, true, false);
 		DOM.insert(markRead, 'atinner', <i className="fa fa-eye"></i>);
 	}
 
 	async ct_markCommentsUnread(markUnread) {
 		DOM.insert(markUnread, 'atinner', <i className="fa fa-circle-o-notch fa-spin"></i>);
-		await this.ct_getComments(0, this.esgst.scopes.main.comments, null, false, false, true);
+		await this.ct_getComments(0, Scope.findData('main', 'comments'), null, false, false, true);
 		DOM.insert(markUnread, 'atinner', <i className="fa fa-eye-slash"></i>);
 	}
 
@@ -1184,7 +1167,8 @@ class CommentsCommentTracker extends Module {
 		obj.markRead.classList.add('esgst-hidden');
 		obj.markUnread.classList.add('esgst-hidden');
 		obj.loadingIcon.classList.remove('esgst-hidden');
-		const deleteLock = await Shared.common.createLock('commentLock', 300);
+		const lock = new Lock('comment', { threshold: 300 });
+		await lock.lock();
 		const comments = JSON.parse(Shared.common.getValue('discussions'));
 		for (const key in comments[obj.code].readComments) {
 			if (comments[obj.code].readComments.hasOwnProperty(key)) {
@@ -1193,7 +1177,7 @@ class CommentsCommentTracker extends Module {
 		}
 		comments[obj.code].lastUsed = Date.now();
 		await Shared.common.setValue('discussions', JSON.stringify(comments));
-		deleteLock();
+		await lock.unlock();
 		obj.loadingIcon.classList.add('esgst-hidden');
 		obj.diffContainer.classList.remove('esgst-hidden');
 		obj.diffContainer.textContent = `(+${obj.count})`;
@@ -1215,15 +1199,11 @@ class CommentsCommentTracker extends Module {
 			}
 		}
 		while (true) {
-			const context = DOM.parse(
-				(
-					await Shared.common.request({
-						method: 'GET',
-						queue: true,
-						url: `${url}${nextPage}`,
-					})
-				).responseText
-			);
+			const context = (
+				await FetchRequest.get(`${url}${nextPage}`, {
+					queue: true,
+				})
+			).html;
 			if (code) {
 				const elements = context.querySelectorAll(`[href*="/go/comment/"]`);
 				// @ts-ignore

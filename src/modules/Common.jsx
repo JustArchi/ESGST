@@ -5,6 +5,7 @@ import { DOM } from '../class/DOM';
 import { EventDispatcher } from '../class/EventDispatcher';
 import { FetchRequest } from '../class/FetchRequest';
 import { LocalStorage } from '../class/LocalStorage';
+import { Lock } from '../class/Lock';
 import { Logger } from '../class/Logger';
 import { Module } from '../class/Module';
 import { permissions } from '../class/Permissions';
@@ -18,8 +19,10 @@ import { Shared } from '../class/Shared';
 import { Tabs } from '../class/Tabs';
 import { ToggleSwitch } from '../class/ToggleSwitch';
 import { Button } from '../components/Button';
+import { Collapsible } from '../components/Collapsible';
 import { NotificationBar } from '../components/NotificationBar';
 import { PageHeading } from '../components/PageHeading';
+import { ClassNames } from '../constants/ClassNames';
 import { Events } from '../constants/Events';
 import { Utils } from '../lib/jsUtils';
 import { settingsModule } from './Settings';
@@ -382,10 +385,10 @@ class Common extends Module {
 			await this.endless_load(document, !this.esgst.parameters.esgst);
 		}
 
-		if (this.esgst.wbcButton && !this.esgst.scopes.main.users.length) {
+		if (this.esgst.wbcButton && !Scope.findData('main', 'users').length) {
 			this.esgst.wbcButton.classList.add('esgst-hidden');
 		}
-		if (this.esgst.uscButton && !this.esgst.scopes.main.users.length) {
+		if (this.esgst.uscButton && !Scope.findData('main', 'users').length) {
 			this.esgst.uscButton.classList.add('esgst-hidden');
 		}
 
@@ -399,7 +402,7 @@ class Common extends Module {
 		`
 		);
 
-		if (Settings.get('updateHiddenGames')) {
+		if (Settings.get('lastSyncHiddenGames') > 0) {
 			const hideButton = document.getElementsByClassName('js__submit-hide-games')[0];
 			if (hideButton) {
 				hideButton.addEventListener('click', () =>
@@ -617,146 +620,7 @@ class Common extends Module {
 	}
 
 	async loadNewGiveawayFeatures(context) {
-		// check if there are no cv games in the results and if they are already in the database
-		const games = {
-			apps: {},
-			subs: {},
-		};
-		let found = false;
-		let elements = context.getElementsByClassName('table__row-outer-wrap');
-		for (const element of elements) {
-			const info = await this.esgst.modules.games.games_getInfo(element);
-			if (!info) {
-				continue;
-			}
-			const dateElement = element.querySelector(
-				`[data-ui-tooltip*="Zero contributor value since..."]`
-			);
-			if (dateElement) {
-				const rows = JSON.parse(dateElement.getAttribute('data-ui-tooltip')).rows;
-				const date = rows[rows.length - 1].columns[1].name;
-				if (
-					!this.esgst.games[info.type][info.id] ||
-					!Utils.isSet(this.esgst.games[info.type][info.id].noCV) ||
-					this.esgst.games[info.type][info.id].noCV !== date
-				) {
-					games[info.type][info.id] = Shared.common.dateToServer(date);
-					found = true;
-				}
-			} else if (
-				this.esgst.games[info.type][info.id] &&
-				Utils.isSet(this.esgst.games[info.type][info.id].noCV)
-			) {
-				games[info.type][info.id] = null;
-				found = true;
-			}
-		}
-		if (this.noCvButton) {
-			this.noCvButton.remove();
-			this.noCvButton = null;
-		}
-		if (found) {
-			this.noCvButton = this.createElements(
-				context.closest('.form__row__indent').previousElementSibling,
-				'beforeend',
-				[
-					{
-						attributes: {
-							class: 'esgst-no-cv-button',
-						},
-						type: 'span',
-						children: [
-							{
-								attributes: {
-									class:
-										'fa fa-calendar-times-o esgst-blinking esgst-bold esgst-clickable esgst-red',
-									title: this.getFeatureTooltip(null, 'Update CV games database'),
-								},
-								type: 'i',
-							},
-						],
-					},
-				]
-			);
-			if (Settings.get('addNoCvGames')) {
-				// noinspection JSIgnoredPromiseFromCall
-				this.addNoCvGames(games);
-			} else {
-				this.noCvButton.firstElementChild.addEventListener(
-					'click',
-					this.addNoCvGames.bind(this, games)
-				);
-			}
-		}
-
-		await this.esgst.modules.games.games_load(document, true);
-	}
-
-	async addNoCvGames(games) {
-		if (!(await permissions.contains([['server']]))) {
-			return;
-		}
-
-		this.createElements(this.noCvButton, 'atinner', [
-			{
-				attributes: {
-					class: 'fa fa-circle-o-notch fa-spin',
-					title: `Updating database (${Object.keys(games.apps)
-						.map((id) => `${games.apps[id] ? 'add' : 'remove'} app ${id}`)
-						.join(', ')}${Object.keys(games.subs)
-						.map((id) => `${games.subs[id] ? 'add' : 'remove'} subs ${id}`)
-						.join(', ')})...`,
-				},
-				type: 'i',
-			},
-		]);
-		const response = await FetchRequest.post('https://rafaelgssa.com/esgst/games/ncv', {
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			data: JSON.stringify(games),
-		});
-		if (response.json && response.json.result) {
-			for (let id in games.apps) {
-				if (games.apps.hasOwnProperty(id)) {
-					games.apps[id] = {
-						noCV: games.apps[id] ? Shared.common.dateFromServer(games.apps[id]) : null,
-					};
-				}
-			}
-			for (let id in games.subs) {
-				if (games.subs.hasOwnProperty(id)) {
-					games.subs[id] = {
-						noCV: games.subs[id] ? Shared.common.dateFromServer(games.subs[id]) : null,
-					};
-				}
-			}
-			await this.lockAndSaveGames(games);
-			this.createElements(this.noCvButton, 'atinner', [
-				{
-					attributes: {
-						class: 'fa fa-check-circle esgst-green',
-						title: `Database updated! (${Object.keys(games.apps)
-							.map((id) => `${games.apps[id] ? 'added' : 'removed'} app ${id}`)
-							.join(', ')}${Object.keys(games.subs)
-							.map((id) => `${games.subs[id] ? 'added' : 'removed'} subs ${id}`)
-							.join(', ')})`,
-					},
-					type: 'i',
-				},
-			]);
-		} else {
-			this.createElements(this.noCvButton, 'atinner', [
-				{
-					attributes: {
-						class: 'fa fa-times-circle esgst-red',
-						title:
-							'Failed to update database! Try again later. If the error persists, please report it.',
-					},
-					type: 'i',
-				},
-			]);
-		}
+		await this.esgst.modules.games.games_load(context, true);
 	}
 
 	async endless_load(context, main, source, endless, mainEndless) {
@@ -773,15 +637,7 @@ class Common extends Module {
 	purgeRemovedElements() {
 		// there are more elements that need to be purged,
 		// but for now these are the most critical ones
-		for (const scopeKey in this.esgst.scopes) {
-			const scope = this.esgst.scopes[scopeKey];
-			for (const dataKey in scope.data) {
-				for (let i = scope.data[dataKey].length - 1; i > -1; i--) {
-					if (document.contains(scope.data[dataKey][i].outerWrap)) continue;
-					scope.data[dataKey].splice(i, 1);
-				}
-			}
-		}
+		Scope.purge();
 		const keys = ['attachedImages', 'tsTables'];
 		for (const key of keys) {
 			for (let i = this.esgst[key].length - 1; i > -1; i--) {
@@ -811,6 +667,7 @@ class Common extends Module {
 	// Helper
 
 	async saveComment(context, tradeCode, parentId, description, url, status, goToLocation) {
+		const username = Settings.get('username');
 		const obj = {
 			context,
 			comment: description,
@@ -821,31 +678,38 @@ class Common extends Module {
 			this.esgst.sg ? 'comment_new' : 'comment_insert'
 		}&trade_code=${tradeCode}&parent_id=${parentId}&description=${encodeURIComponent(description)}`;
 		let id = null;
-		let response = await this.request({ data, method: 'POST', url });
+		let response = await FetchRequest.post(url, { data });
 		let responseHtml = null;
 		let success = true;
 		if (this.esgst.sg) {
 			if (response.redirected) {
-				responseHtml = DOM.parse(response.responseText);
+				responseHtml = response.html;
+				let commentEls;
 				if (parentId) {
-					id = responseHtml
-						.querySelector(`[data-comment-id="${parentId}"]`)
-						.getElementsByClassName('comment__children')[0]
-						.lastElementChild.getElementsByClassName('comment__summary')[0].id;
+					commentEls =
+						responseHtml
+							.querySelector(`[data-comment-id="${parentId}"]`)
+							?.querySelector('.comment__children')?.children ?? [];
 				} else {
-					const elements = responseHtml.getElementsByClassName('comments');
-					id = elements[elements.length - 1].lastElementChild.getElementsByClassName(
-						'comment__summary'
-					)[0].id;
+					const els = responseHtml.querySelectorAll('.comments') ?? [];
+					commentEls = els[els.length - 1].children;
+				}
+				commentEls = Array.from(commentEls).reverse();
+				for (const commentEl of commentEls) {
+					const author = commentEl.querySelector('.comment__username')?.textContent.trim() ?? '';
+					if (author === username) {
+						id = commentEl.querySelector('.comment__summary')?.id ?? '';
+						break;
+					}
 				}
 			} else {
 				success = false;
 			}
 		} else {
-			const responseJson = JSON.parse(response.responseText);
+			const responseJson = response.json;
 			if (responseJson.success) {
 				responseHtml = DOM.parse(responseJson.html);
-				id = responseHtml.getElementsByClassName('comment_outer')[0].id;
+				id = responseHtml.querySelector('.comment_outer')?.id ?? '';
 			} else {
 				success = false;
 			}
@@ -913,32 +777,77 @@ class Common extends Module {
 			},
 			others: {
 				features: {
-					notifyLogs: {
-						name: 'Notify about console logs.',
-						sg: true,
-						st: true,
-					},
-					useTemporaryStorage: {
+					limitSteamStore: {
 						description: () => (
 							<ul>
-								<li>You must restart your browser every time you enable / disable this option.</li>
 								<li>
-									With this option enabled, your data will be temporarily saved in the background
-									page of the extension (in your RAM) and then persisted to your HD only every
-									minute or when all SG / ST tabs are closed. This reduces disk writes and should
-									also reduce CPU usage, consequently making the extension faster.
-								</li>
-								<li>
-									WARNING: This is experimental. Because your data is only persisted every minute or
-									when all SG / ST tabs are closed, if you close your browser or it crashes before
-									the data is persisted, you will lose everything that you did on ESGST since the
-									last save. For reference, the date of the last save can be found in the ESGST
-									dropdown (in the header).
+									With this option enabled, requests to the Steam store will be limited to 1 per 200
+									milliseconds, to prevent the user from running into potential blocks, specially
+									when using features like {Shared.common.getFeatureName(null, 'gc')}.
 								</li>
 							</ul>
 						),
-						extensionOnly: true,
-						name: 'Use a temporary storage to improve the extension performance (experimental).',
+						name: 'Limit Steam store requests.',
+						sg: true,
+					},
+					useCustomAdaReqLim: {
+						name: 'Use custom adaptive request limits for SteamGifts.',
+						sg: true,
+						inputItems: [
+							{
+								id: 'customAdaReqLim_default',
+								prefix: '1 request every ',
+								suffix: ' seconds (default)',
+								attributes: {
+									type: 'number',
+									min: '0.25',
+									step: '0.01',
+								},
+							},
+							{
+								id: 'customAdaReqLim_minute50',
+								prefix: '1 request every ',
+								suffix: ' seconds (after using 50% of the minute limit)',
+								attributes: {
+									type: 'number',
+									min: '0.5',
+									step: '0.01',
+								},
+							},
+							{
+								id: 'customAdaReqLim_minute75',
+								prefix: '1 request every ',
+								suffix: ' seconds (after using 75% of the minute limit)',
+								attributes: {
+									type: 'number',
+									min: '1',
+									step: '0.01',
+								},
+							},
+							{
+								id: 'customAdaReqLim_hourly75',
+								prefix: '1 request every ',
+								suffix: ' seconds (after using 75% of the hourly limit)',
+								attributes: {
+									type: 'number',
+									min: '1.5',
+									step: '0.01',
+								},
+							},
+							{
+								id: 'customAdaReqLim_daily75',
+								prefix: '1 request every ',
+								suffix: ' seconds (after using 75% of the daily limit)',
+								attributes: {
+									type: 'number',
+									min: '2',
+									step: '0.01',
+								},
+							},
+						],
+					},
+					notifyLogs: {
+						name: 'Notify about console logs.',
 						sg: true,
 						st: true,
 					},
@@ -1007,11 +916,6 @@ class Common extends Module {
 						st: true,
 						permissions: ['cookies'],
 					},
-					addNoCvGames: {
-						name:
-							'Automatically add no CV games to the database when searching for games in the new giveaway page.',
-						sg: true,
-					},
 					askFileName: {
 						name: 'Ask for file name when backing up data.',
 						sg: true,
@@ -1047,31 +951,6 @@ class Common extends Module {
 					},
 					openAutoSyncNewTab: {
 						name: 'Open automatic sync in a new tab.',
-						sg: true,
-					},
-					updateHiddenGames: {
-						description: () => (
-							<ul>
-								<li>
-									With this enabled, you no longer have to sync your hidden games every time you
-									add/remove a game to/from the list.
-								</li>
-							</ul>
-						),
-						name: 'Automatically update hidden games when adding/removing a game to/from the list.',
-						sg: true,
-					},
-					updateWhitelistBlacklist: {
-						description: () => (
-							<ul>
-								<li>
-									With this enabled, you no longer have to sync your whitelist/blacklist every time
-									you add/remove a user to/from those lists.
-								</li>
-							</ul>
-						),
-						name:
-							'Automatically update whitelist/blacklist when adding/removing a user to/from those lists.',
 						sg: true,
 					},
 					calculateDelete: {
@@ -1184,20 +1063,6 @@ class Common extends Module {
 							</ul>
 						),
 						name: 'Retrieve game names when syncing.',
-						sg: true,
-						st: true,
-					},
-					showMessages: {
-						description: () => (
-							<ul>
-								<li>
-									Important messages are used to inform ESGST users of something that needs their
-									attention. Because these messages are retrieved from GitHub, the extension doesn't
-									need to be updated in order for them to be hard-coded.
-								</li>
-							</ul>
-						),
-						name: 'Show important messages.',
 						sg: true,
 						st: true,
 					},
@@ -1398,8 +1263,8 @@ class Common extends Module {
 						<fragment>
 							ESGST has updated from v{Shared.esgst.previousVersion} to v
 							{Shared.esgst.currentVersion}! Please go to{' '}
-							<a href="https://github.com/rafaelgssa/esgst/-/releases">
-								https://github.com/rafaelgssa/esgst/-/releases
+							<a href="https://github.com/rafaelgomesxyz/esgst/-/releases">
+								https://github.com/rafaelgomesxyz/esgst/-/releases
 							</a>{' '}
 							to view the changelog. If you want the changelog to be automatically retrieved from
 							GitHub and shown in this popup when updating, then go to the settings menu and grant
@@ -1425,7 +1290,7 @@ class Common extends Module {
 				let changelog = '';
 
 				const refsResponse = await FetchRequest.get(
-					'https://api.github.com/repos/rafaelgssa/esgst/git/matching-refs/tags'
+					'https://api.github.com/repos/rafaelgomesxyz/esgst/git/matching-refs/tags'
 				);
 
 				if (!refsResponse || !refsResponse.json) {
@@ -1445,12 +1310,12 @@ class Common extends Module {
 					while (currentIndex < previousIndex) {
 						const version = refs[currentIndex].ref.split('/tags/')[1];
 						const releaseResponse = await FetchRequest.get(
-							`https://api.github.com/repos/rafaelgssa/esgst/releases/tags/${version}`
+							`https://api.github.com/repos/rafaelgomesxyz/esgst/releases/tags/${version}`
 						);
 						if (releaseResponse && releaseResponse.json) {
 							changelog = `${changelog}## ${version}\n\n${releaseResponse.json.body.replace(
 								/#(\d+)/g,
-								'[$1](https://github.com/rafaelgssa/esgst/issues/$1)'
+								'[$1](https://github.com/rafaelgomesxyz/esgst/issues/$1)'
 							)}\n\n`;
 						}
 
@@ -1473,8 +1338,8 @@ class Common extends Module {
 					<fragment>
 						ESGST has updated from v{Shared.esgst.previousVersion} to v{Shared.esgst.currentVersion}
 						! An error occurred when retrieving the changelog from GitHub, please go to{' '}
-						<a href="https://github.com/rafaelgssa/esgst/releases">
-							https://github.com/rafaelgssa/esgst/releases
+						<a href="https://github.com/rafaelgomesxyz/esgst/releases">
+							https://github.com/rafaelgomesxyz/esgst/releases
 						</a>{' '}
 						to view it.
 					</fragment>
@@ -1634,7 +1499,8 @@ class Common extends Module {
 	}
 
 	async lockAndSaveSettings(settingsObj) {
-		const deleteLock = await this.createLock('settingsLock', 100);
+		const lock = new Lock('settings');
+		await lock.lock();
 		const settings = JSON.parse(this.getValue('settings', '{}'));
 		for (const key in settingsObj) {
 			if (settingsObj[key] === null) {
@@ -1646,11 +1512,12 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('settings', JSON.stringify(settings));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async setSetting() {
-		const deleteLock = await this.createLock('settingsLock', 100);
+		const lock = new Lock('settings');
+		await lock.lock();
 		const settings = JSON.parse(this.getValue('settings', '{}'));
 		const values = Array.isArray(arguments[0])
 			? arguments[0]
@@ -1672,7 +1539,7 @@ class Common extends Module {
 			settings[value.id] = value.value;
 		}
 		await this.setValue('settings', JSON.stringify(settings));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	dismissFeature(feature, id) {
@@ -1704,13 +1571,13 @@ class Common extends Module {
 			const buttonContainer = Shared.header.buttonContainers[id];
 
 			if (buttonContainer.data.id === 'esgst') {
-				buttonContainer.nodes.relativeDropdown.classList.toggle('is-hidden');
-				buttonContainer.nodes.relativeDropdown.classList.toggle('is_hidden');
-				buttonContainer.nodes.arrow.classList.toggle('is-selected');
-				buttonContainer.nodes.arrow.classList.toggle('is_selected');
+				buttonContainer.nodes.relativeDropdown.classList.toggle(
+					ClassNames[Session.namespace].hidden
+				);
+				buttonContainer.nodes.arrow.classList.toggle(ClassNames[Session.namespace].selected);
 			} else if (buttonContainer.data.isDropdown) {
-				buttonContainer.nodes.relativeDropdown.classList.add('is-hidden', 'is_hidden');
-				buttonContainer.nodes.arrow.classList.remove('is-selected', 'is_selected');
+				buttonContainer.nodes.relativeDropdown.classList.add(ClassNames[Session.namespace].hidden);
+				buttonContainer.nodes.arrow.classList.remove(ClassNames[Session.namespace].selected);
 			}
 		}
 	}
@@ -1733,7 +1600,7 @@ class Common extends Module {
 	}
 
 	getFeatureNumber(queryId) {
-		let n = 1;
+		let n = browser.runtime.getURL ? 2 : 1;
 		for (let type in this.esgst.features) {
 			if (this.esgst.features.hasOwnProperty(type)) {
 				let i = 1;
@@ -1822,7 +1689,8 @@ class Common extends Module {
 				}
 				list.existing.push(user);
 			} else {
-				let deleteLock = await this.createLock('userLock', 300);
+				const lock = new Lock('user', { threshold: 300 });
+				await lock.lock();
 				this.checkUsernameChange(savedUsers, user);
 				for (let key in user.values) {
 					if (user.values.hasOwnProperty(key)) {
@@ -1836,7 +1704,7 @@ class Common extends Module {
 					}
 				}
 				await this.setValue('users', JSON.stringify(savedUsers));
-				deleteLock();
+				await lock.unlock();
 			}
 		} else {
 			if (user.steamId && user.username) {
@@ -1882,8 +1750,9 @@ class Common extends Module {
 	}
 
 	async addUser(user) {
-		let deleteLock, savedUser, savedUsers;
-		deleteLock = await this.createLock('userLock', 300);
+		let savedUser, savedUsers;
+		const lock = new Lock('user', { threshold: 300 });
+		await lock.lock();
 		savedUsers = JSON.parse(this.getValue('users'));
 		savedUser = await this.getUser(savedUsers, user);
 		if (!savedUser) {
@@ -1909,20 +1778,16 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('users', JSON.stringify(savedUsers));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async getUsername(list, save, user) {
-		let match, response, responseHtml;
-		response = await this.request({
-			method: 'GET',
-			url: `https://www.steamgifts.com/go/user/${user.steamId}`,
-		});
-		match = response.finalUrl.match(/\/user\/(.+)/);
-		responseHtml = DOM.parse(response.responseText);
+		let match;
+		const response = await FetchRequest.get(`https://www.steamgifts.com/go/user/${user.steamId}`);
+		match = response.url.match(/\/user\/(.+)/);
 		if (match) {
 			user.username = match[1];
-			let input = responseHtml.querySelector(`[name="child_user_id"]`);
+			let input = response.html.querySelector(`[name="child_user_id"]`);
 			if (input) {
 				user.id = input.value;
 			}
@@ -1937,7 +1802,7 @@ class Common extends Module {
 	}
 
 	async getSteamId(list, save, savedUsers, user) {
-		let input, responseHtml;
+		let input;
 		if (!save) {
 			if (!savedUsers) {
 				savedUsers = JSON.parse(this.getValue('users'));
@@ -1949,23 +1814,14 @@ class Common extends Module {
 				return;
 			}
 		}
-		const response = await this.request({
-			method: 'GET',
-			url: `https://www.steamgifts.com/user/${user.username}`,
-		});
-		if (!response.finalUrl.match(/\/user\//)) {
+		const response = await FetchRequest.get(
+			`https://www.steamgifts.com/user/${user.username}?format=json`
+		);
+		if (!response.url.includes('/user/') || !response.json.success) {
 			return;
 		}
-		responseHtml = DOM.parse(response.responseText);
-		const profileLink = responseHtml.querySelector(`[href*="/profiles/"]`);
-		if (!profileLink) {
-			return;
-		}
-		user.steamId = profileLink.getAttribute('href').match(/\d+/)[0];
-		input = responseHtml.querySelector(`[name="child_user_id"]`);
-		if (input) {
-			user.id = input.value;
-		}
+		user.steamId = response.json.user.steam_id;
+		user.id = response.json.user.id;
 		if (save) {
 			if (list) {
 				list.new.push(user);
@@ -1989,7 +1845,8 @@ class Common extends Module {
 		for (let i = 0, n = users.length; i < n; i++) {
 			await this.saveUser(list, savedUsers, users[i]);
 		}
-		let deleteLock = await this.createLock('userLock', 300);
+		const lock = new Lock('user', { threshold: 300 });
+		await lock.lock();
 		savedUsers = JSON.parse(this.getValue('users'));
 		for (let i = 0, n = list.new.length; i < n; ++i) {
 			let savedUser, user;
@@ -2034,13 +1891,13 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('users', JSON.stringify(savedUsers));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async deleteUserValues(values) {
-		let deleteLock, savedUsers;
-		deleteLock = await this.createLock('userLock', 300);
-		savedUsers = JSON.parse(this.getValue('users'));
+		const lock = new Lock('user', { threshold: 300 });
+		await lock.lock();
+		const savedUsers = JSON.parse(this.getValue('users'));
 		for (let key in savedUsers.users) {
 			if (savedUsers.users.hasOwnProperty(key)) {
 				for (let i = 0, n = values.length; i < n; ++i) {
@@ -2049,7 +1906,7 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('users', JSON.stringify(savedUsers));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async getUserId(user) {
@@ -2070,10 +1927,7 @@ class Common extends Module {
 			LocalStorage.set('isSyncing', currentDate);
 			[
 				'Groups',
-				'Whitelist',
-				'Blacklist',
 				'SteamFriends',
-				'HiddenGames',
 				'Games',
 				'FollowedGames',
 				'WonGames',
@@ -2130,15 +1984,14 @@ class Common extends Module {
 			const element = elements[i],
 				match = element.getAttribute('href').match(/\/(app|sub)\/(.+)/);
 			if (!match) continue;
-			const id = match[2],
-				response = await this.request({
-					method: 'GET',
-					url: `http://store.steampowered.com/api/${
-						match[1] === 'app' ? 'appdetails?appids' : 'packagedetails?packageids'
-					}=${id}&filters=basic`,
-				});
+			const id = match[2];
 			try {
-				element.textContent = JSON.parse(response.responseText)[id].data.name;
+				const response = await FetchRequest.get(
+					`http://store.steampowered.com/api/${
+						match[1] === 'app' ? 'appdetails?appids' : 'packagedetails?packageids'
+					}=${id}&filters=basic`
+				);
+				element.textContent = response.json[id].data.name;
 			} catch (e) {
 				element.classList.add('esgst-red');
 				element.title = 'Unable to retrieve name for this game';
@@ -2153,12 +2006,13 @@ class Common extends Module {
 	async lockAndSaveGiveaways(giveaways, firstRun) {
 		if (!Object.keys(giveaways).length) return;
 
-		let deleteLock;
+		let lock;
 		let savedGiveaways;
 		if (firstRun) {
 			savedGiveaways = this.esgst.giveaways;
 		} else {
-			deleteLock = await this.createLock('giveawayLock', 300);
+			lock = new Lock('giveaway', { threshold: 300 });
+			await lock.lock();
 			savedGiveaways = JSON.parse(this.getValue('giveaways', '{}'));
 		}
 		for (let key in giveaways) {
@@ -2180,13 +2034,16 @@ class Common extends Module {
 		}
 		if (!firstRun) {
 			await this.setValue('giveaways', JSON.stringify(savedGiveaways));
-			deleteLock();
+			if (lock) {
+				await lock.unlock();
+			}
 		}
 	}
 
 	async lockAndSaveDiscussions(discussions) {
-		let deleteLock = await this.createLock('discussionLock', 300),
-			savedDiscussions = JSON.parse(this.getValue('discussions', '{}'));
+		const lock = new Lock('discussion', { threshold: 300 });
+		await lock.lock();
+		const savedDiscussions = JSON.parse(this.getValue('discussions', '{}'));
 		for (let key in discussions) {
 			if (discussions.hasOwnProperty(key)) {
 				if (savedDiscussions[key]) {
@@ -2208,11 +2065,12 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('discussions', JSON.stringify(savedDiscussions));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async lockAndSaveTickets(items) {
-		const deleteLock = await this.createLock('ticketLock', 300);
+		const lock = new Lock('ticket', { threshold: 300 });
+		await lock.lock();
 		const saved = JSON.parse(this.getValue('tickets', '{}'));
 		for (const key in items) {
 			if (items.hasOwnProperty(key)) {
@@ -2235,11 +2093,12 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('tickets', JSON.stringify(saved));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async lockAndSaveTrades(items) {
-		const deleteLock = await this.createLock('tradeLock', 300);
+		const lock = new Lock('trade', { threshold: 300 });
+		await lock.lock();
 		const saved = JSON.parse(this.getValue('trades', '{}'));
 		for (const key in items) {
 			if (items.hasOwnProperty(key)) {
@@ -2262,11 +2121,12 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('trades', JSON.stringify(saved));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async lockAndSaveGroups(groups, sync) {
-		const deleteLock = await this.createLock('groupLock', 300);
+		const lock = new Lock('group', { threshold: 300 });
+		await lock.lock();
 		let savedGroups = JSON.parse(this.getValue('groups', '[]'));
 		if (!Array.isArray(savedGroups)) {
 			const newGroups = [];
@@ -2299,9 +2159,7 @@ class Common extends Module {
 					savedGroups.push(savedGroup);
 				}
 				if (!savedGroup.avatar || !savedGroup.steamId) {
-					const html = DOM.parse(
-						(await this.request({ method: 'GET', url: `/group/${code}/` })).responseText
-					);
+					const html = (await FetchRequest.get(`/group/${code}/`)).html;
 					savedGroup.avatar = html
 						.getElementsByClassName('global__image-inner-wrap')[0]
 						.style.backgroundImage.match(/\/avatars\/(.+)_full/)[1];
@@ -2313,13 +2171,11 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('groups', JSON.stringify(savedGroups));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	lookForPopups(response) {
-		const popup = (response.html || DOM.parse(response.responseText)).querySelector(
-			`.popup--gift-sent, .popup--gift-received`
-		);
+		const popup = response.html.querySelector(`.popup--gift-sent, .popup--gift-received`);
 		if (!popup) {
 			return;
 		}
@@ -2362,15 +2218,8 @@ class Common extends Module {
 			syncer.progressBar.setMessage(
 				`Syncing your won games (page ${nextPage}${lastPage ? ` of ${lastPage}` : ''})...`
 			);
-			const responseHtml = DOM.parse(
-					(
-						await this.request({
-							method: 'GET',
-							url: `/giveaways/won/search?page=${nextPage}`,
-						})
-					).responseText
-				),
-				elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
+			const responseHtml = (await FetchRequest.get(`/giveaways/won/search?page=${nextPage}`)).html;
+			const elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
 			if (!lastPage) {
 				lastPage = this.esgst.modules.generalLastPageLink.lpl_getLastPage(responseHtml);
 			}
@@ -2511,11 +2360,9 @@ class Common extends Module {
 		}
 		if (numDiscussions < 5 || numDeals < 5) {
 			let [response1, response2] = await Promise.all([
-				this.request({ method: 'GET', url: '/discussions' }),
-				this.request({ method: 'GET', url: '/discussions/deals' }),
+				FetchRequest.get('/discussions'),
+				FetchRequest.get('/discussions/deals'),
 			]);
-			let response1Html = DOM.parse(response1.responseText);
-			let response2Html = DOM.parse(response2.responseText);
 			let revisedElements = [];
 			let preset = null;
 			if (Settings.get('df') && Settings.get('df_m') && Settings.get('df_enable')) {
@@ -2532,7 +2379,7 @@ class Common extends Module {
 					}
 				}
 			}
-			(await this.esgst.modules.discussions.discussions_get(response1Html, true)).forEach(
+			(await this.esgst.modules.discussions.discussions_get(response1.html, true)).forEach(
 				(element) => {
 					// @ts-ignore
 					if (element.category !== 'Deals') {
@@ -2557,7 +2404,7 @@ class Common extends Module {
 				}
 				i -= 1;
 			}
-			let elements = await this.esgst.modules.discussions.discussions_get(response2Html, true);
+			let elements = await this.esgst.modules.discussions.discussions_get(response2.html, true);
 			i = elements.length - (numDeals + filteredDeals + 1);
 			while (numDeals < 5 && i > -1) {
 				if (
@@ -2806,12 +2653,13 @@ class Common extends Module {
 		let giveaway;
 		if (i < n) {
 			if (hidden[i]) {
-				let response = await this.request({
-					method: 'GET',
-					queue: true,
-					url: `https://www.steamgifts.com/giveaway/${hidden[i].code}/`,
-				});
-				giveaway = await this.buildGiveaway(DOM.parse(response.responseText), response.finalUrl);
+				let response = await FetchRequest.get(
+					`https://www.steamgifts.com/giveaway/${hidden[i].code}/`,
+					{
+						queue: true,
+					}
+				);
+				giveaway = await this.buildGiveaway(response.html, response.url);
 				if (giveaway) {
 					this.createElements(gfGiveaways, 'beforeend', giveaway.html);
 					await this.endless_load(gfGiveaways.lastElementChild, false, 'gf');
@@ -3275,8 +3123,8 @@ class Common extends Module {
 				<div>
 					<i className="fa fa-times"></i>
 					<span>
-						No permissions granted for https://rafaelgssa.com. Please grant the permissions on the
-						settings menu so that the data can be retrieved from the ESGST API.
+						No permissions granted for https://esgst.rafaelgomes.xyz. Please grant the permissions
+						on the settings menu so that the data can be retrieved from the ESGST API.
 					</span>
 				</div>
 			);
@@ -3319,12 +3167,18 @@ class Common extends Module {
 
 	async getRecentChanges() {
 		const response = await FetchRequest.get(
-			'https://rafaelgssa.com/esgst/users/uh?format_array=true&show_recent=true'
+			'https://esgst.rafaelgomes.xyz/api/users/uh?format_array=true&show_recent=true'
 		);
 		return response.json.result.found;
 	}
 
 	updateWhitelistBlacklist(key, profile, event) {
+		if (
+			(key === 'whitelisted' && Settings.get('lastSyncWhitelist') === 0) ||
+			(key === 'blacklisted' && Settings.get('lastSyncBlacklist') === 0)
+		) {
+			return;
+		}
 		let user;
 		user = {
 			steamId: profile.steamId,
@@ -3349,7 +3203,7 @@ class Common extends Module {
 	 * @returns {Promise<void>}
 	 */
 	async updateHiddenGames(id, type, unhide) {
-		if (!Settings.get('updateHiddenGames')) {
+		if (Settings.get('lastSyncHiddenGames') === 0) {
 			return;
 		}
 		const games = {
@@ -3424,23 +3278,9 @@ class Common extends Module {
 		window.URL.revokeObjectURL(url);
 	}
 
-	async createLock(key, threshold, v2Obj) {
-		const lock = {
-			key,
-			threshold,
-			uuid: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, Utils.createUuid.bind(Utils)),
-			...v2Obj,
-		};
-		const wasLocked = await this.do_lock(lock);
-		const deleteLock = this.do_unlock.bind(this, lock);
-		if (v2Obj) {
-			return { deleteLock, lock, wasLocked };
-		}
-		return deleteLock;
-	}
-
 	async lockAndSaveGames(games) {
-		let deleteLock = await this.createLock('gameLock', 300);
+		const lock = new Lock('game', { threshold: 300 });
+		await lock.lock();
 		let saved = JSON.parse(this.getValue('games'));
 		if (games.apps) {
 			for (let key in games.apps) {
@@ -3487,7 +3327,7 @@ class Common extends Module {
 			}
 		}
 		await this.setValue('games', JSON.stringify(saved));
-		deleteLock();
+		await lock.unlock();
 	}
 
 	async setSMManageFilteredUsers() {
@@ -3821,51 +3661,6 @@ class Common extends Module {
 		}
 	}
 
-	async request(details) {
-		if (!details.headers) {
-			details.headers = {};
-		}
-		details.headers['From'] = 'esgst.extension@gmail.com';
-		details.headers['Esgst-Version'] = Shared.esgst.currentVersion;
-		if (!details.headers['Content-Type']) {
-			details.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-		}
-		let isLocal =
-			details.url.match(/^\//) || details.url.match(new RegExp(window.location.hostname));
-		if (isLocal || details.queue) {
-			if (isLocal) {
-				details.queue = 2000;
-			}
-			let deleteLock = await this.createLock(
-				'requestLock',
-				typeof details.queue === 'number' ? details.queue : 1000
-			);
-			let response = await this.continueRequest(details);
-			if (isLocal) {
-				Shared.esgst.requestLog.unshift({
-					url: details.url,
-					timestamp: Date.now(),
-				});
-				if (response.redirected) {
-					Shared.esgst.requestLog.unshift({
-						url: response.finalUrl,
-						timestamp: Date.now(),
-					});
-				}
-				await Shared.common.setValue('requestLog', JSON.stringify(Shared.esgst.requestLog));
-			}
-			deleteLock();
-			return response;
-		} else if (details.url.match(/^https?:\/\/store.steampowered.com/)) {
-			const deleteLock = await this.createLock('steamStore', 200);
-			const response = await this.continueRequest(details);
-			deleteLock();
-			return response;
-		} else {
-			return await this.continueRequest(details);
-		}
-	}
-
 	hideGame(button, id, name, steamId, steamType) {
 		let elements, i, popup;
 		popup = new Popup({
@@ -3882,10 +3677,8 @@ class Common extends Module {
 				template: 'success',
 				name: 'Yes',
 				onClick: async () => {
-					await this.request({
+					await FetchRequest.post('/ajax.php', {
 						data: `xsrf_token=${Session.xsrfToken}&do=hide_giveaways_by_game_id&game_id=${id}`,
-						method: 'POST',
-						url: '/ajax.php',
 					});
 					await this.updateHiddenGames(steamId, steamType);
 					elements = document.querySelectorAll(`.giveaway__row-outer-wrap[data-game-id="${id}"]`);
@@ -3932,10 +3725,8 @@ class Common extends Module {
 				template: 'success',
 				name: 'Yes',
 				onClick: async () => {
-					await this.request({
+					await FetchRequest.post('/ajax.php', {
 						data: `xsrf_token=${Session.xsrfToken}&do=remove_filter&game_id=${id}`,
-						method: 'POST',
-						url: '/ajax.php',
 					});
 					await this.updateHiddenGames(steamId, steamType, true);
 					button.remove();
@@ -5237,6 +5028,16 @@ class Common extends Module {
 		popup.open();
 	}
 
+	createConfirmationAsync(message) {
+		return new Promise((resolve) =>
+			this.createConfirmation(
+				message,
+				() => resolve(true),
+				() => resolve(false)
+			)
+		);
+	}
+
 	createFadeMessage(context, message) {
 		context.textContent = message;
 		window.setTimeout(() => {
@@ -5424,32 +5225,13 @@ class Common extends Module {
 	 * @returns {PlayerAchievementsSteamApiResponse}
 	 */
 	async getPlayerAchievements(appId, steamId) {
-		const text = (
-			await this.request({
-				method: 'GET',
-				url: `http://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${appId}&key=${Settings.get(
+		return (
+			await FetchRequest.get(
+				`http://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v0001/?appid=${appId}&key=${Settings.get(
 					'steamApiKey'
-				)}&steamid=${steamId}`,
-			})
-		).responseText;
-		return JSON.parse(text);
-	}
-
-	/**
-	 * @param steamIds
-	 * @returns {SuspensionsApiResponse}
-	 */
-	async getSuspensions(steamIds) {
-		return JSON.parse(
-			(
-				await this.request({
-					method: 'GET',
-					url: `https://script.google.com/macros/s/AKfycbwdKNormCJs-hEKV0GVwawgWj1a26oVtPylgmxOOvNk1Gf17A/exec?steamIds=${steamIds.join(
-						`,`
-					)}`,
-				})
-			).responseText
-		);
+				)}&steamid=${steamId}`
+			)
+		).json;
 	}
 
 	async submitComment(obj) {
@@ -5471,17 +5253,13 @@ class Common extends Module {
 			return;
 		}
 
-		const response = await this.request({
-				method: 'GET',
-				url: obj.commentUrl,
-			}),
-			responseHtml = DOM.parse(response.responseText),
-			comment = responseHtml.getElementById(obj.commentUrl.match(/\/comment\/(.+)/)[1]);
+		const response = await FetchRequest.get(obj.commentUrl);
+		const comment = response.html.getElementById(obj.commentUrl.match(/\/comment\/(.+)/)[1]);
 		obj.parentId = this.esgst.sg
 			? comment.closest('.comment').getAttribute('data-comment-id')
 			: comment.getAttribute('data-id');
-		obj.tradeCode = this.esgst.sg ? '' : response.finalUrl.match(/\/trade\/(.+?)\//)[1];
-		obj.url = this.esgst.sg ? response.finalUrl.match(/(.+?)(#.+?)?$/)[1] : '/ajax.php';
+		obj.tradeCode = this.esgst.sg ? '' : response.url.match(/\/trade\/(.+?)\//)[1];
+		obj.url = this.esgst.sg ? response.url.match(/(.+?)(#.+?)?$/)[1] : '/ajax.php';
 
 		if (obj.checked || !Settings.get('rfi_c')) {
 			const result = await this.saveComment(
@@ -5633,7 +5411,7 @@ class Common extends Module {
 				obj.update && obj.update('Updating API cache...');
 
 				try {
-					const response = await FetchRequest.get('https://rafaelgssa.com/esgst/games/sgids');
+					const response = await FetchRequest.get('https://esgst.rafaelgomes.xyz/api/games/sgids');
 					api = {
 						cache: {
 							appids: response.json.result.found.apps,
@@ -5738,12 +5516,10 @@ class Common extends Module {
 
 			obj.update && obj.update(`${title} games (${index} of ${total})...`);
 
-			await this.request({
+			await FetchRequest.post('/ajax.php', {
 				data: `xsrf_token=${Session.xsrfToken}&do=${
 					unhide ? 'remove_filter' : 'hide_giveaways_by_game_id'
 				}&game_id=${id}`,
-				method: 'POST',
-				url: '/ajax.php',
 			});
 		}
 
@@ -5761,17 +5537,13 @@ class Common extends Module {
 
 	async getGameSgId(id, type) {
 		const elements = DOM.parse(
-			JSON.parse(
-				(
-					await this.request({
-						data: `do=autocomplete_giveaway_game&page_number=1&search_query=${encodeURIComponent(
-							id
-						)}`,
-						method: 'POST',
-						url: '/ajax.php',
-					})
-				).responseText
-			).html
+			(
+				await FetchRequest.post('/ajax.php', {
+					data: `do=autocomplete_giveaway_game&page_number=1&search_query=${encodeURIComponent(
+						id
+					)}`,
+				})
+			).json.html
 		).querySelectorAll('.table__row-outer-wrap');
 		for (const element of elements) {
 			const info = await this.esgst.modules.games.games_getInfo(element);
@@ -5890,17 +5662,8 @@ class Common extends Module {
 	}
 
 	setValues(values) {
-		let promise;
-		if (Shared.esgst.isTemporaryStorage) {
-			promise = browser.runtime.sendMessage({
-				action: 'set_values',
-				values: JSON.stringify(values),
-			});
-		} else {
-			promise = browser.storage.local.set(values);
-		}
 		return new Promise((resolve) =>
-			promise.then(() => {
+			browser.storage.local.set(values).then(() => {
 				for (const key in values) {
 					if (values.hasOwnProperty(key)) {
 						this.esgst.storage[key] = values[key];
@@ -5935,17 +5698,8 @@ class Common extends Module {
 	}
 
 	delValues(keys) {
-		let promise;
-		if (Shared.esgst.isTemporaryStorage) {
-			promise = browser.runtime.sendMessage({
-				action: 'del_values',
-				keys: JSON.stringify(keys),
-			});
-		} else {
-			promise = browser.storage.local.remove(keys);
-		}
 		return new Promise((resolve) =>
-			promise.then(() => {
+			browser.storage.local.remove(keys).then(() => {
 				keys.forEach((key) => delete this.esgst.storage[key]);
 				resolve();
 			})
@@ -5954,94 +5708,6 @@ class Common extends Module {
 
 	delValue(key) {
 		return this.delValues([key]);
-	}
-
-	continueRequest(details) {
-		return new Promise(async (resolve, reject) => {
-			let isLocal =
-				details.url.match(/^\//) || details.url.match(new RegExp(window.location.hostname));
-			details.url = details.url
-				.replace(/^\//, `https://${window.location.hostname}/`)
-				.replace(/^https?:/, Shared.esgst.locationHref.match(/^http:/) ? 'http:' : 'https:');
-			if (isLocal) {
-				const requestOptions = {
-					body: details.data,
-					credentials: /** @type {"omit"|"include"} */ details.anon ? 'omit' : 'include',
-					headers: details.headers,
-					method: details.method,
-					redirect: 'follow',
-				};
-				let response = null;
-				let responseText = null;
-				try {
-					let _fetch;
-					let _requestOptions;
-					if (
-						(await this.getBrowserInfo()).name === 'Firefox' &&
-						Utils.isSet(window.wrappedJSObject)
-					) {
-						// @ts-ignore
-						_fetch = XPCNativeWrapper(window.wrappedJSObject.fetch);
-						// @ts-ignore
-						window.wrappedJSObject.requestOptions = cloneInto(requestOptions, window);
-						// @ts-ignore
-						_requestOptions = XPCNativeWrapper(window.wrappedJSObject.requestOptions);
-					} else {
-						_fetch = window.fetch;
-						_requestOptions = requestOptions;
-					}
-					response = await _fetch(details.url, _requestOptions);
-					responseText = await response.text();
-					if (!response.ok) {
-						throw responseText;
-					}
-				} catch (error) {
-					reject({ error });
-					return;
-				}
-				response = {
-					finalUrl: response.url,
-					redirected: response.redirected,
-					responseText,
-				};
-				resolve(response);
-				if (response.finalUrl.match(/www.steamgifts.com/)) {
-					this.lookForPopups(response);
-				}
-			} else {
-				const manipulateCookies =
-					(await this.getBrowserInfo()).name === 'Firefox' && Settings.get('manipulateCookies');
-
-				browser.runtime
-					.sendMessage({
-						action: 'fetch',
-						blob: details.blob,
-						fileName: details.fileName,
-						manipulateCookies,
-						parameters: JSON.stringify({
-							body: details.data,
-							credentials: details.anon || manipulateCookies ? 'omit' : 'include',
-							headers: details.headers,
-							method: details.method,
-							redirect: 'follow',
-						}),
-						url: details.url,
-					})
-					.then((response) => {
-						if (typeof response === 'string') {
-							response = JSON.parse(response);
-						}
-						if (Utils.isSet(response.error)) {
-							reject(response);
-							return;
-						}
-						resolve(response);
-						if (response.finalUrl.match(/www.steamgifts.com/)) {
-							this.lookForPopups(response);
-						}
-					});
-			}
-		});
 	}
 
 	openDonationsPopup() {
@@ -6057,10 +5723,19 @@ class Common extends Module {
 				<div>
 					<a
 						class="table__column__secondary-link"
-						href={`https://www.buymeacoffee.com/rafaelgssa`}
+						href={`https://www.buymeacoffee.com/rafaelgomesxyz`}
 						target="_blank"
 					>
 						<strong>Buy Me A Coffee</strong>
+					</a>
+				</div>
+				<div>
+					<a
+						class="table__column__secondary-link"
+						href={`https://www.patreon.com/rafaelgomesxyz`}
+						target="_blank"
+					>
+						<strong>Patreon</strong>
 					</a>
 				</div>
 				<div>
@@ -6073,7 +5748,8 @@ class Common extends Module {
 					</a>
 				</div>
 				<div>
-					<strong>Paypal:</strong> rafael.gssa@pm.me {this.getCopyIcon('rafael.gssa@pm.me')}
+					<strong>Paypal:</strong> rafaelgomesxyz@gmail.com{' '}
+					{this.getCopyIcon('rafaelgomesxyz@gmail.com')}
 				</div>
 				<div>
 					<strong>Bitcoin:</strong> 32WY96ch5MSZ3FNubL5f7QZ9K3WWNHNpV9{' '}
@@ -6107,205 +5783,237 @@ class Common extends Module {
 			title: 'SteamGifts Request Log',
 			isTemp: true,
 		});
+		const [buttonGroup] = DOM.insert(
+			popup.description,
+			'beforeend',
+			<div className="esgst-button-group">View: </div>
+		);
+		Button.create({
+			color: 'green',
+			name: 'Default',
+			onClick: async () => {
+				await Shared.common.setSetting('sgRequestLog_view', 'default');
+				this.loadRequestLog(limits, scrollableArea);
+			},
+		}).insert(buttonGroup, 'beforeend');
+		Button.create({
+			color: 'green',
+			name: 'Minutes',
+			onClick: async () => {
+				await Shared.common.setSetting('sgRequestLog_view', 'minute');
+				this.loadRequestLog(limits, scrollableArea);
+			},
+		}).insert(buttonGroup, 'beforeend');
+		Button.create({
+			color: 'green',
+			name: 'Hours',
+			onClick: async () => {
+				await Shared.common.setSetting('sgRequestLog_view', 'hour');
+				this.loadRequestLog(limits, scrollableArea);
+			},
+		}).insert(buttonGroup, 'beforeend');
+		Button.create({
+			color: 'green',
+			name: 'Days',
+			onClick: async () => {
+				await Shared.common.setSetting('sgRequestLog_view', 'day');
+				this.loadRequestLog(limits, scrollableArea);
+			},
+		}).insert(buttonGroup, 'beforeend');
 		const scrollableArea = popup.getScrollable(null);
 		scrollableArea.className = 'markdown';
 		popup.open();
 
 		do {
-			const currentDate = new Date();
-			const now = currentDate.getTime();
-			const currentDay = currentDate.getDate();
-			const currentHour = currentDate.getHours();
-			const currentMinute = currentDate.getMinutes();
-			currentDate.setDate(currentDay - 1);
-			const lastDay = currentDate.getDate();
-			currentDate.setHours(currentHour - 1);
-			const lastHour = currentDate.getHours();
-			currentDate.setMinutes(currentMinute - 1);
-			const lastMinute = currentDate.getMinutes();
-
-			let thisMinuteUrls = {};
-			let thisHourUrls = {};
-			let thisDayUrls = {};
-			let lastMinuteUrls = {};
-			let lastHourUrls = {};
-			let lastDayUrls = {};
-			let thisMinuteTotal = 0;
-			let thisHourTotal = 0;
-			let thisDayTotal = 0;
-			let lastMinuteTotal = 0;
-			let lastHourTotal = 0;
-			let lastDayTotal = 0;
-
-			Shared.esgst.requestLog = Shared.esgst.requestLog.filter(
-				(log) => now - log.timestamp <= 2592000000
-			);
-			for (const log of Shared.esgst.requestLog) {
-				const date = new Date(log.timestamp);
-				const day = date.getDate();
-				const hour = date.getHours();
-				const minute = date.getMinutes();
-
-				if (day === currentDay) {
-					thisDayUrls[log.url] = (thisDayUrls[log.url] ?? 0) + 1;
-					thisDayTotal += 1;
-					if (hour === currentHour) {
-						thisHourUrls[log.url] = (thisHourUrls[log.url] ?? 0) + 1;
-						thisHourTotal += 1;
-						if (minute === currentMinute) {
-							thisMinuteUrls[log.url] = (thisMinuteUrls[log.url] ?? 0) + 1;
-							thisMinuteTotal += 1;
-						} else if (minute === lastMinute) {
-							lastMinuteUrls[log.url] = (lastMinuteUrls[log.url] ?? 0) + 1;
-							lastMinuteTotal += 1;
-						}
-					} else if (hour === lastHour) {
-						lastHourUrls[log.url] = (lastHourUrls[log.url] ?? 0) + 1;
-						lastHourTotal += 1;
-						if (minute === lastMinute) {
-							lastMinuteUrls[log.url] = (lastMinuteUrls[log.url] ?? 0) + 1;
-							lastMinuteTotal += 1;
-						}
-					}
-				} else if (day === lastDay) {
-					lastDayUrls[log.url] = (lastDayUrls[log.url] ?? 0) + 1;
-					lastDayTotal += 1;
-					if (hour === lastHour) {
-						lastHourUrls[log.url] = (lastHourUrls[log.url] ?? 0) + 1;
-						lastHourTotal += 1;
-						if (minute === lastMinute) {
-							lastMinuteUrls[log.url] = (lastMinuteUrls[log.url] ?? 0) + 1;
-							lastMinuteTotal += 1;
-						}
-					}
-				} else {
-					break;
-				}
-			}
-			await Shared.common.setValue('requestLog', JSON.stringify(Shared.esgst.requestLog));
-
-			thisMinuteUrls = Utils.sortArray(
-				Object.entries(thisMinuteUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-			thisHourUrls = Utils.sortArray(
-				Object.entries(thisHourUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-			thisDayUrls = Utils.sortArray(
-				Object.entries(thisDayUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-			lastMinuteUrls = Utils.sortArray(
-				Object.entries(lastMinuteUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-			lastHourUrls = Utils.sortArray(
-				Object.entries(lastHourUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-			lastDayUrls = Utils.sortArray(
-				Object.entries(lastDayUrls).map(([url, count]) => ({ url, count })),
-				true,
-				'count'
-			);
-
-			DOM.insert(
-				scrollableArea,
-				'atinner',
-				<fragment>
-					<p>
-						<em>Last updated {currentDate.toLocaleString()}</em>
-						<br />
-						<em>
-							Remember that this does not include the requests you make while browsing SteamGifts,
-							so you don't want to reach 0 requests left, because that leaves exactly 0 requests for
-							your browsing.
-						</em>
-					</p>
-					<h3>
-						This Minute ({thisMinuteTotal} / Max: {limits.minute} / Left:{' '}
-						{limits.minute - thisMinuteTotal})
-					</h3>
-					<ul>
-						{thisMinuteUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-					<h3>
-						This Hour ({thisHourTotal} / Max: {limits.hour} / Left: {limits.hour - thisHourTotal})
-					</h3>
-					<ul>
-						{thisHourUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-					<h3>
-						This Day ({thisDayTotal} / Max: {limits.day} / Left: {limits.day - thisDayTotal})
-					</h3>
-					<ul>
-						{thisDayUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-					<h3>Last Minute ({lastMinuteTotal})</h3>
-					<ul>
-						{lastMinuteUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-					<h3>Last Hour ({lastHourTotal})</h3>
-					<ul>
-						{lastHourUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-					<h3>Last Day ({lastDayTotal})</h3>
-					<ul>
-						{lastDayUrls.map(({ url, count }) => (
-							<li>
-								<a href={url}>{url}</a> ({count})
-							</li>
-						))}
-					</ul>
-				</fragment>
-			);
-
+			this.loadRequestLog(limits, scrollableArea);
 			await Shared.common.timeout(10000);
 		} while (popup.isOpen);
+	};
+
+	loadRequestLog = async (limits, scrollableArea) => {
+		const currentDate = new Date();
+		const now = currentDate.getTime();
+		const currentDay = currentDate.getDate();
+		const currentHour = currentDate.getHours();
+		const currentMinute = currentDate.getMinutes();
+		currentDate.setDate(currentDay - 1);
+		const lastDay = currentDate.getDate();
+		currentDate.setHours(currentHour - 1);
+		const lastHour = currentDate.getHours();
+		currentDate.setMinutes(currentMinute - 1);
+		const lastMinute = currentDate.getMinutes();
+
+		const info = {
+			minute: {
+				title: 'Minute',
+				items: [],
+			},
+			hour: {
+				title: 'Hour',
+				items: [],
+			},
+			day: {
+				title: 'Day',
+				items: [],
+			},
+		};
+
+		Shared.esgst.requestLog = Shared.esgst.requestLog.filter(
+			(log) => now - log.timestamp <= 2592000000
+		);
+		for (const log of Shared.esgst.requestLog) {
+			const date = new Date(log.timestamp);
+			const day = date.getDate();
+			const hour = date.getHours();
+			const minute = date.getMinutes();
+
+			if (day === currentDay) {
+				if (!info.day.items[0]) {
+					info.day.items[0] = { count: 0, urls: {} };
+				}
+				info.day.items[0].urls[log.url] = (info.day.items[0].urls[log.url] ?? 0) + 1;
+				info.day.items[0].count += 1;
+				const hIndex = currentHour - hour;
+				if (!info.hour.items[hIndex]) {
+					info.hour.items[hIndex] = { count: 0, urls: {} };
+				}
+				info.hour.items[hIndex].urls[log.url] = (info.hour.items[hIndex].urls[log.url] ?? 0) + 1;
+				info.hour.items[hIndex].count += 1;
+				const mIndex = hour === currentHour ? currentMinute - minute : 60 - minute + currentMinute;
+				if (mIndex < 60) {
+					if (!info.minute.items[mIndex]) {
+						info.minute.items[mIndex] = { count: 0, urls: {} };
+					}
+					info.minute.items[mIndex].urls[log.url] =
+						(info.minute.items[mIndex].urls[log.url] ?? 0) + 1;
+					info.minute.items[mIndex].count += 1;
+				}
+			} else if (day === lastDay) {
+				if (!info.day.items[1]) {
+					info.day.items[1] = { count: 0, urls: {} };
+				}
+				info.day.items[1].urls[log.url] = (info.day.items[1].urls[log.url] ?? 0) + 1;
+				info.day.items[1].count += 1;
+				const hIndex = 24 - hour + currentHour;
+				if (hIndex < 24) {
+					if (!info.hour.items[hIndex]) {
+						info.hour.items[hIndex] = { count: 0, urls: {} };
+					}
+					info.hour.items[hIndex].urls[log.url] = (info.hour.items[hIndex].urls[log.url] ?? 0) + 1;
+					info.hour.items[hIndex].count += 1;
+				}
+				if (hour === lastHour) {
+					const mIndex = 60 - minute + currentMinute;
+					if (mIndex < 60) {
+						if (!info.minute.items[mIndex]) {
+							info.minute.items[mIndex] = { count: 0, urls: {} };
+						}
+						info.minute.items[mIndex].urls[log.url] =
+							(info.minute.items[mIndex].urls[log.url] ?? 0) + 1;
+						info.minute.items[mIndex].count += 1;
+					}
+				}
+			} else {
+				break;
+			}
+		}
+		await Shared.common.setValue('requestLog', JSON.stringify(Shared.esgst.requestLog));
+
+		for (const key in info) {
+			for (let i = 0, n = info[key].items.length; i < n; i++) {
+				if (info[key].items[i]) {
+					info[key].items[i].urls = Utils.sortArray(
+						Object.entries(info[key].items[i].urls).map(([url, count]) => ({ url, count })),
+						true,
+						'count'
+					);
+				}
+			}
+		}
+
+		const nodes = [];
+		const view = Settings.get('sgRequestLog_view');
+		if (!view || view === 'default') {
+			for (const i of [0, 1]) {
+				for (const key in info) {
+					let title;
+					const count = info[key].items[i]?.count ?? 0;
+					const countPercentage = Math.round((count / limits[key]) * 10000) / 100;
+					if (i === 0) {
+						const countLeft = limits[key] - count;
+						const countLeftPercentage = Math.round((100 - countPercentage) * 100) / 100;
+						title = `This ${info[key].title} - Current: ${count} (${countPercentage}%) / Left: ${countLeft} (${countLeftPercentage}%) / Max: ${limits[key]}`;
+					} else {
+						title = `Last ${info[key].title} - ${count} (${countPercentage}%)`;
+					}
+					nodes.push(
+						Collapsible.create(
+							<h3>{title}</h3>,
+							<ul>
+								{(info[key].items[i]?.urls ?? []).map(({ url, count }) => (
+									<li>
+										<a href={url}>{url}</a> ({count})
+									</li>
+								))}
+							</ul>,
+							`sgRequestLog_${key}_${i}`
+						)
+					);
+				}
+			}
+		} else {
+			const key = view;
+			for (let i = 0, n = info[key].items.length; i < n; i++) {
+				let title;
+				const count = info[key].items[i]?.count ?? 0;
+				const countPercentage = Math.round((count / limits[key]) * 100) / 100;
+				if (i === 0) {
+					const countLeft = limits[key] - count;
+					const countLeftPercentage = Math.round((100 - countPercentage) * 100) / 100;
+					title = `This ${info[key].title} - Current: ${count} (${countPercentage}%) / Left: ${countLeft} (${countLeftPercentage}%) / Max: ${limits[key]}`;
+				} else {
+					title = `${i} ${Utils.getPlural(
+						i,
+						info[key].title
+					)} Ago - ${count} (${countPercentage}%)`;
+				}
+				nodes.push(
+					Collapsible.create(
+						<h3>{title}</h3>,
+						<ul>
+							{(info[key].items[i]?.urls ?? []).map(({ url, count }) => (
+								<li>
+									<a href={url}>{url}</a> ({count})
+								</li>
+							))}
+						</ul>,
+						`sgRequestLog_${key}_${i}`
+					)
+				);
+			}
+		}
+
+		DOM.insert(
+			scrollableArea,
+			'atinner',
+			<fragment>
+				<p>
+					<em>Last updated {currentDate.toLocaleString()}</em>
+					<br />
+					<em>
+						Remember that this does not include the requests you make while browsing SteamGifts, so
+						you don't want to reach 0 requests left, because that leaves exactly 0 requests for your
+						browsing.
+					</em>
+				</p>
+				{nodes}
+			</fragment>
+		);
 	};
 
 	async addHeaderMenu() {
 		if (!Shared.header) {
 			return;
-		}
-
-		let saveDescription = null;
-		let saveOnClick = null;
-		if (
-			Settings.get('useTemporaryStorage') &&
-			(await this.getBrowserInfo()).name !== 'userscript'
-		) {
-			const lastSaved = await browser.runtime.sendMessage({ action: 'get_last_saved' });
-			saveDescription = `${
-				lastSaved ? `Last saved on ${new Date(lastSaved).toLocaleString()}.` : 'Never saved.'
-			} Click to force a save.`;
-			saveOnClick = () => browser.runtime.sendMessage({ action: 'save' });
 		}
 
 		Shared.header.addButtonContainer({
@@ -6320,21 +6028,21 @@ class Common extends Module {
 					icon: 'fa fa-fw fa-github icon-grey grey',
 					name: 'GitHub',
 					openInNewTab: true,
-					url: 'https://github.com/rafaelgssa/esgst',
+					url: 'https://github.com/rafaelgomesxyz/esgst',
 				},
 				{
 					description: 'Report bugs and / or make suggestions.',
 					icon: 'fa fa-fw fa-bug icon-red red',
 					name: 'Bugs / Suggestions',
 					openInNewTab: true,
-					url: 'https://github.com/rafaelgssa/esgst/issues',
+					url: 'https://github.com/rafaelgomesxyz/esgst/issues',
 				},
 				{
 					description: "Check out what's coming in the next versions.",
 					icon: 'fa fa-fw fa-map-signs icon-blue blue',
 					name: 'Milestones',
 					openInNewTab: true,
-					url: 'https://github.com/rafaelgssa/esgst/milestones',
+					url: 'https://github.com/rafaelgomesxyz/esgst/milestones',
 				},
 				{
 					description: 'Visit the discussion page.',
@@ -6354,7 +6062,7 @@ class Common extends Module {
 					icon: 'fa fa-fw fa-file-text-o icon-yellow yellow',
 					name: 'Changelog',
 					openInNewTab: true,
-					url: 'https://github.com/rafaelgssa/esgst/releases',
+					url: 'https://github.com/rafaelgomesxyz/esgst/releases',
 				},
 				{
 					description: 'Help make ESGST better!',
@@ -6369,10 +6077,8 @@ class Common extends Module {
 					onClick: this.openRequestLog.bind(this),
 				},
 				{
-					description: saveDescription,
 					icon: 'fa fa-fw fa-info-circle icon-grey grey',
 					name: `Current Version: ${Shared.esgst.versionName}`,
-					onClick: saveOnClick,
 				},
 			],
 			onClick: (event) => {
@@ -6408,33 +6114,6 @@ class Common extends Module {
 			selectors = selectors.map((x) => x.replace(/X/, '')).join(`, `);
 		}
 		return selectors;
-	}
-
-	addScope(name, context) {
-		const scope = new Scope(name, context);
-		if (!this.esgst.scopes[scope.id]) {
-			this.esgst.scopes[scope.id] = scope;
-		}
-		return scope.id;
-	}
-
-	removeScope(id) {
-		if (this.esgst.scopes[id]) {
-			delete this.esgst.scopes[id];
-		}
-	}
-
-	setCurrentScope(id) {
-		this.esgst.currentScope = this.esgst.scopes[id];
-		this.esgst.scopeHistory.push(id);
-		//Logger.info(`Current scope: `, this.esgst.currentScope.id);
-	}
-
-	resetCurrentScope() {
-		this.esgst.scopeHistory.pop();
-		const id = this.esgst.scopeHistory[this.esgst.scopeHistory.length - 1];
-		this.esgst.currentScope = this.esgst.scopes[id];
-		//Logger.info(`Current scope: `, this.esgst.currentScope.id);
 	}
 
 	getLevelFromCv(cv) {

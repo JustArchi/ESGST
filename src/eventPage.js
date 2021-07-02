@@ -1,4 +1,39 @@
 import JSZip from 'jszip';
+import { RequestQueue } from './class/Queue';
+
+const lastRequests = {};
+
+RequestQueue.getLastRequest = (key) => {
+	return lastRequests[key] ?? 0;
+};
+
+RequestQueue.setLastRequest = (key, lastRequest) => {
+	lastRequests[key] = lastRequest;
+};
+
+RequestQueue.getRequestThresholds = async () => {
+	const values = await browser.storage.local.get('settings');
+	const settings = values.settings ? JSON.parse(values.settings) : {};
+	if (settings['useCustomAdaReqLim_sg']) {
+		const thresholds = {};
+		for (const [key, minThreshold] of Object.entries(RequestQueue.queue.sg.minThresholds)) {
+			thresholds[key] = parseFloat(settings[`customAdaReqLim_${key}`] ?? 0.0);
+			if (thresholds[key] < minThreshold) {
+				thresholds[key] = minThreshold;
+			}
+		}
+		return thresholds;
+	} else {
+		return { ...RequestQueue.queue.sg.minThresholds };
+	}
+};
+
+RequestQueue.getRequestLog = async () => {
+	const values = await browser.storage.local.get('requestLog');
+	return JSON.parse(values.requestLog);
+};
+
+RequestQueue.init();
 
 /**
  * @typedef {Object} OpenTab
@@ -9,9 +44,6 @@ import JSZip from 'jszip';
 /** @type {OpenTab[]} */
 let openTabs = [];
 let storage = {};
-let isTemporaryStorage = false;
-let storageChanges = null;
-let lastSaved = 0;
 let browserInfo = null;
 let hasAddedWebRequestListener = false;
 
@@ -35,9 +67,6 @@ loadStorage().then(async () => {
 	 * @property {boolean} activateTab_st
 	 */
 	const settings = storage.settings ? JSON.parse(storage.settings) : {};
-	if (settings.useTemporaryStorage_sg || settings.useTemporaryStorage_st) {
-		isTemporaryStorage = true;
-	}
 	if (settings.activateTab_sg || settings.activateTab_st) {
 		// Get the currently active tab.
 		const currentTab = (await queryTabs({ active: true }))[0];
@@ -82,38 +111,8 @@ loadStorage().then(async () => {
 	}
 });
 
-let checkSaveTimeout = 0;
-
-const keepCheckingSave = async () => {
-	await checkSave();
-	checkSaveTimeout = window.setTimeout(keepCheckingSave, 60000);
-};
-
-const checkSave = async (force) => {
-	const now = Date.now();
-	//console.log(storageChanges);
-	//console.log('Checking...', force, now - lastSaved);
-	if (storageChanges && (force || now - lastSaved > 60000)) {
-		const storageChangesBkp = storageChanges;
-		storageChanges = null;
-		lastSaved = now;
-		//console.log('Saving storage...');
-		await browser.storage.local.set(storageChangesBkp);
-		//console.log('Storage saved!');
-		sendMessage('storageSaved', null, now, true);
-	}
-};
-
 browser.tabs.onRemoved.addListener(async (tabId) => {
 	openTabs = openTabs.filter((tab) => tab.id !== tabId);
-	if (openTabs.length > 0) {
-		return;
-	}
-	await checkSave(true);
-	if (checkSaveTimeout) {
-		window.clearTimeout(checkSaveTimeout);
-		checkSaveTimeout = 0;
-	}
 });
 
 function addWebRequestListener() {
@@ -225,7 +224,16 @@ async function doFetch(parameters, request, sender, callback) {
 	let response = null;
 	let responseText = null;
 	try {
+		const abortController = new AbortController();
+
+		const { timeout = 10000 } = request;
+		const timeoutId = window.setTimeout(() => abortController.abort(), timeout);
+
+		parameters.signal = abortController.signal;
 		response = await window.fetch(request.url, parameters);
+
+		window.clearTimeout(timeoutId);
+
 		responseText = request.blob
 			? (await readZip(await response.blob()))[0].value
 			: await response.text();
@@ -238,9 +246,10 @@ async function doFetch(parameters, request, sender, callback) {
 	}
 	callback(
 		JSON.stringify({
-			finalUrl: response.url,
+			status: response.status,
+			url: response.url,
 			redirected: response.redirected,
-			responseText: responseText,
+			text: responseText,
 		})
 	);
 }
@@ -256,11 +265,7 @@ function do_lock(lock) {
 function _do_lock(lock, resolve) {
 	const now = Date.now();
 	let locked = locks[lock.key];
-	if (
-		!locked ||
-		!locked.uuid ||
-		locked.timestamp < now - (lock.threshold + (lock.timeout || 15000))
-	) {
+	if (!locked || !locked.uuid || locked.timestamp < now - (lock.threshold + lock.timeout)) {
 		locks[lock.key] = {
 			timestamp: now,
 			uuid: lock.uuid,
@@ -268,7 +273,7 @@ function _do_lock(lock, resolve) {
 		setTimeout(() => {
 			locked = locks[lock.key];
 			if (!locked || locked.uuid !== lock.uuid) {
-				if (!lock.lockOrDie) {
+				if (!lock.tryOnce) {
 					setTimeout(() => _do_lock(lock, resolve), 0);
 				} else {
 					resolve('false');
@@ -277,7 +282,7 @@ function _do_lock(lock, resolve) {
 				resolve('true');
 			}
 		}, lock.threshold / 2);
-	} else if (!lock.lockOrDie) {
+	} else if (!lock.tryOnce) {
 		setTimeout(() => _do_lock(lock, resolve), lock.threshold / 3);
 	} else {
 		resolve('false');
@@ -321,6 +326,9 @@ browser.runtime.onMessage.addListener((request, sender) => {
 			case 'getBrowserInfo':
 				resolve(JSON.stringify(browserInfo));
 				break;
+			case 'queue_request':
+				RequestQueue.enqueue(request.key).then(resolve);
+				break;
 			case 'do_lock':
 				do_lock(JSON.parse(request.lock)).then(resolve);
 				break;
@@ -353,68 +361,16 @@ browser.runtime.onMessage.addListener((request, sender) => {
 			case 'open_tab':
 				openTab(request.url);
 				break;
-			case 'get_storage': {
+			case 'register_tab': {
 				openTabs.push({
 					id: sender.tab.id,
 					url: request.url,
 				});
-				if (isTemporaryStorage) {
-					if (!checkSaveTimeout) {
-						await keepCheckingSave();
-					}
-					if (Object.keys(storage).length === 0) {
-						await loadStorage();
-					}
-					resolve(JSON.stringify(storage));
-				} else {
-					resolve('null');
-				}
-				break;
-			}
-			case 'set_values': {
-				if (!storageChanges) {
-					storageChanges = {};
-				}
-				const newValues = {
-					changes: {},
-					areaName: 'local',
-				};
-				const values = JSON.parse(request.values);
-				for (const key in values) {
-					storage[key] = values[key];
-					storageChanges[key] = values[key];
-					newValues.changes[key] = { newValue: values[key] };
-				}
-				await checkSave();
-				sendMessage('storageChanged', sender, newValues, true);
 				resolve();
 				break;
 			}
-			case 'del_values': {
-				if (!storageChanges) {
-					storageChanges = {};
-				}
-				const newValues = {
-					changes: {},
-					areaName: 'local',
-				};
-				const keys = JSON.parse(request.keys);
-				for (const key of keys) {
-					storage[key] = null;
-					storageChanges[key] = null;
-					newValues.changes[key] = { newValue: null };
-				}
-				await checkSave();
-				sendMessage('storageChanged', sender, newValues, true);
-				resolve();
-				break;
-			}
-			case 'get_last_saved':
-				resolve(lastSaved);
-				break;
-			case 'save': {
-				await checkSave(true);
-				resolve();
+			case 'update_adareqlim': {
+				RequestQueue.loadRequestThreshold().then(resolve);
 				break;
 			}
 		}
@@ -471,7 +427,10 @@ async function openTab(url) {
 	const tab = (await browser.tabs.query({ active: true }))[0];
 	if (tab) {
 		options.index = tab.index + 1;
-		if (await browser.permissions.contains({ permissions: ['cookies'] })) {
+		if (
+			(await browser.permissions.contains({ permissions: ['cookies'] })) &&
+			'cookieStoreId' in tab
+		) {
 			options.cookieStoreId = tab.cookieStoreId;
 		}
 	}

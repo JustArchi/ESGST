@@ -1,6 +1,7 @@
 import dateFns_differenceInDays from 'date-fns/differenceInDays';
 import { DOM } from '../../class/DOM';
 import { EventDispatcher } from '../../class/EventDispatcher';
+import { FetchRequest } from '../../class/FetchRequest';
 import { Logger } from '../../class/Logger';
 import { Module } from '../../class/Module';
 import { permissions } from '../../class/Permissions';
@@ -20,8 +21,7 @@ import { common } from '../Common';
 const buildGiveaway = common.buildGiveaway.bind(common),
 	createElements = common.createElements.bind(common),
 	createHeadingButton = common.createHeadingButton.bind(common),
-	endless_load = common.endless_load.bind(common),
-	request = common.request.bind(common);
+	endless_load = common.endless_load.bind(common);
 class GiveawaysGiveawayExtractor extends Module {
 	constructor() {
 		super();
@@ -140,14 +140,11 @@ class GiveawaysGiveawayExtractor extends Module {
 			}
 
 			this.ge = {
-				context: DOM.parse(
-					(
-						await request({
-							method: 'GET',
-							url: `${parameters.url}${parameters.page ? `/search?page=${parameters.page}` : ''}`,
-						})
-					).responseText
-				),
+				context: (
+					await FetchRequest.get(
+						`${parameters.url}${parameters.page ? `/search?page=${parameters.page}` : ''}`
+					)
+				).html,
 			};
 
 			Shared.esgst.customPages.ge = {
@@ -180,20 +177,17 @@ class GiveawaysGiveawayExtractor extends Module {
 				id: 'ge',
 				icons: ['fa-gift', 'fa-search'],
 				title: 'Extract all giveaways',
+				link: Settings.get('ge_t')
+					? `https://www.steamgifts.com/account/settings/profile?esgst=ge&url=${window.location.pathname.replace(
+							/\/search.*/,
+							''
+					  )}${this.esgst.parameters.page ? `&page=${this.esgst.parameters.page}` : ''}`
+					: '',
 			}),
 		};
-		this.ge.button.addEventListener('click', () => {
-			if (Settings.get('ge_t')) {
-				Tabs.open(
-					`https://www.steamgifts.com/account/settings/profile?esgst=ge&url=${window.location.pathname.replace(
-						/\/search.*/,
-						''
-					)}${this.esgst.parameters.page ? `&page=${this.esgst.parameters.page}` : ''}`
-				);
-			} else {
-				this.ge_openPopup(this.ge);
-			}
-		});
+		if (!Settings.get('ge_t')) {
+			this.ge.button.addEventListener('click', () => this.ge_openPopup(this.ge));
+		}
 	}
 
 	async ge_openPopup(ge) {
@@ -578,9 +572,9 @@ class GiveawaysGiveawayExtractor extends Module {
 			});
 			for (let link of [...ge.cache[ge.cacheId].ithLinks, ...ge.cache[ge.cacheId].jigidiLinks]) {
 				if (Settings.get('ge_j')) {
-					const match = link.match(/id=(.+)/);
-					if (match) {
-						link = `https://www.jigidi.com/jigsaw-puzzle/${match[1]}`;
+					const id = this.extractJigidiId(link);
+					if (id) {
+						link = `https://www.jigidi.com/jigsaw-puzzle/${id}`;
 					}
 				}
 				items[0].children.push(
@@ -684,21 +678,19 @@ class GiveawaysGiveawayExtractor extends Module {
 						if (Settings.get('ge_sgtga')) {
 							try {
 								if (Settings.get('ge_sgtga_u')) {
-									await request({
-										method: 'GET',
+									await FetchRequest.get(`https://www.sgtools.info/giveaways/${code}/check`, {
 										queue: true,
-										url: `https://www.sgtools.info/giveaways/${code}/check`,
 									});
 								}
-								const response = await request({
-									method: 'GET',
-									queue: true,
-									url: `https://www.sgtools.info/giveaways/${code}/getLink`,
-								});
-								const json = JSON.parse(response.responseText);
-								if (json && json.url) {
+								const response = await FetchRequest.get(
+									`https://www.sgtools.info/giveaways/${code}/getLink`,
+									{
+										queue: true,
+									}
+								);
+								if (response.json && response.json.url) {
 									ge.extracted.push(code);
-									code = json.url.match(/\/giveaway\/(.{5})/)[1];
+									code = response.json.url.match(/\/giveaway\/(.{5})/)[1];
 									sgTools = false;
 								}
 							} catch (error) {
@@ -709,15 +701,14 @@ class GiveawaysGiveawayExtractor extends Module {
 					if (ge.extracted.indexOf(code) < 0) {
 						let bumpLink, button, giveaway, giveaways, n, responseHtml;
 						try {
-							let response = await request({
-								method: 'GET',
-								url: sgTools ? `https://www.sgtools.info/giveaways/${code}` : `/giveaway/${code}/`,
-							});
-							responseHtml = DOM.parse(response.responseText);
+							let response = await FetchRequest.get(
+								sgTools ? `https://www.sgtools.info/giveaways/${code}` : `/giveaway/${code}/`
+							);
+							responseHtml = response.html;
 							button = responseHtml.getElementsByClassName('sidebar__error')[0];
 							giveaway = await buildGiveaway(
 								responseHtml,
-								response.finalUrl,
+								response.url,
 								button && button.textContent
 							);
 						} catch (error) {}
@@ -759,13 +750,11 @@ class GiveawaysGiveawayExtractor extends Module {
 						} else if (!sgTools) {
 							let bumpLink, giveaway, giveaways, n, responseHtml;
 							try {
-								let response = await request({
+								let response = await FetchRequest.get(`/giveaway/${code}/`, {
 									anon: true,
-									method: 'GET',
-									url: `/giveaway/${code}/`,
 								});
-								responseHtml = DOM.parse(response.responseText);
-								giveaway = await buildGiveaway(responseHtml, response.finalUrl, null, true);
+								responseHtml = response.html;
+								giveaway = await buildGiveaway(responseHtml, response.url, null, true);
 							} catch (error) {}
 							if (giveaway) {
 								createElements(ge.results, 'beforeend', giveaway.html);
@@ -897,8 +886,9 @@ class GiveawaysGiveawayExtractor extends Module {
 			ge.cache[ge.cacheId].ithLinks.add(url);
 		}
 		const jigidiSelectors = [
-			`[href*="jigidi.com/jigsaw-puzzle/"]`,
-			`[href*="jigidi.com/solve.php"]`,
+			'[href*="jigidi.com/jigsaw-puzzle"]',
+			'[href*="jigidi.com/solve"]',
+			'[href*="jigidi.com/created"]',
 		];
 		let jigidiLinks;
 		if (ge.ignoreDiscussionComments && !description && op) {
@@ -913,9 +903,9 @@ class GiveawaysGiveawayExtractor extends Module {
 		for (const link of jigidiLinks) {
 			let url = link.getAttribute('href');
 			if (Settings.get('ge_j')) {
-				const match = url.match(/id=(.+)/);
-				if (match) {
-					url = `https://www.jigidi.com/jigsaw-puzzle/${match[1]}`;
+				const id = this.extractJigidiId(url);
+				if (id) {
+					url = `https://www.jigidi.com/jigsaw-puzzle/${id}`;
 				}
 			}
 			ge.cache[ge.cacheId].jigidiLinks.add(url);
@@ -1050,6 +1040,11 @@ class GiveawaysGiveawayExtractor extends Module {
 			ge.cache[ge.cacheId].jigidiLinks = Array.from(ge.cache[ge.cacheId].jigidiLinks);
 			await common.setValue('geCache', JSON.stringify(ge.cache));
 		}
+	}
+
+	extractJigidiId(url) {
+		const matches = url.match(/(jigsaw-puzzle|solve)\/([A-Za-z0-9]+)|id=([A-Za-z0-9]+)/);
+		return matches[2] || matches[3];
 	}
 }
 

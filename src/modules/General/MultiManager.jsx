@@ -1,10 +1,12 @@
 import dateFns_format from 'date-fns/format';
 import { Checkbox } from '../../class/Checkbox';
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
 import { Module } from '../../class/Module';
 import { Popout } from '../../class/Popout';
 import { Popup } from '../../class/Popup';
 import { Process } from '../../class/Process';
+import { Scope } from '../../class/Scope';
 import { Session } from '../../class/Session';
 import { Settings } from '../../class/Settings';
 import { Tabs } from '../../class/Tabs';
@@ -23,7 +25,6 @@ const createElements = common.createElements.bind(common),
 	getChildByClassName = common.getChildByClassName.bind(common),
 	lockAndSaveDiscussions = common.lockAndSaveDiscussions.bind(common),
 	lockAndSaveGiveaways = common.lockAndSaveGiveaways.bind(common),
-	request = common.request.bind(common),
 	selectSwitches = common.selectSwitches.bind(common);
 class GeneralMultiManager extends Module {
 	constructor() {
@@ -141,7 +142,7 @@ class GeneralMultiManager extends Module {
 	}
 
 	mm_getGames(games, main) {
-		this.esgst.mm_enable(this.esgst.currentScope.games, 'Games');
+		this.esgst.mm_enable(Scope.findData('current', 'games'), 'Games');
 	}
 
 	mm_openPopout(obj, items, itemsKey) {
@@ -245,7 +246,7 @@ class GeneralMultiManager extends Module {
 
 	mm_enable(obj, items, key) {
 		if (!items) {
-			items = this.esgst.currentScope[key.toLowerCase()];
+			items = Scope.findData('current', key.toLowerCase());
 		}
 		items.forEach((item) => {
 			let checkbox =
@@ -288,7 +289,7 @@ class GeneralMultiManager extends Module {
 	mm_disable(obj, items, key) {
 		obj.checkboxes[key] = {};
 		if (!items) {
-			items = this.esgst.currentScope[key.toLowerCase()];
+			items = Scope.findData('current', key.toLowerCase());
 		}
 		items.forEach((item) => {
 			let checkbox =
@@ -306,7 +307,7 @@ class GeneralMultiManager extends Module {
 		if (event) {
 			if (event.shiftKey) {
 				const currentKey = `mmCheckbox${key}`;
-				const items = this.esgst.currentScope[key.toLowerCase()];
+				const items = Scope.findData('current', key.toLowerCase());
 				const elements = document.querySelectorAll(`[data-mm-key="${key}"]`);
 				let foundStart = false;
 				// @ts-ignore
@@ -375,7 +376,7 @@ class GeneralMultiManager extends Module {
 
 	mm_setSection(obj, context, items, key) {
 		if (!items) {
-			items = this.esgst.currentScope[key.toLowerCase()];
+			items = Scope.findData('current', key.toLowerCase());
 		}
 		let sections = {
 			default: [
@@ -1300,19 +1301,15 @@ class GeneralMultiManager extends Module {
 				: description.value.includes(searchValue);
 			if (match) {
 				const idContext = description.previousElementSibling;
-				let responseJson = JSON.parse(
-					(
-						await request({
-							data: `xsrf_token=${Session.xsrfToken}&do=edit_giveaway_description&giveaway_id=${
-								idContext.value
-							}&description=${encodeURIComponent(
-								description.value.replace(searchValue, replaceValue)
-							)}`,
-							method: 'POST',
-							url: '/ajax.php',
-						})
-					).responseText
-				);
+				let responseJson = (
+					await FetchRequest.post('/ajax.php', {
+						data: `xsrf_token=${Session.xsrfToken}&do=edit_giveaway_description&giveaway_id=${
+							idContext.value
+						}&description=${encodeURIComponent(
+							description.value.replace(searchValue, replaceValue)
+						)}`,
+					})
+				).json;
 				if (responseJson.type === 'success') {
 					createElements(obj.context.firstElementChild.firstElementChild, 'beforeend', [
 						{

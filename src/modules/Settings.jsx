@@ -4,7 +4,6 @@ import { Logger } from '../class/Logger';
 import { permissions } from '../class/Permissions';
 import { Popup } from '../class/Popup';
 import { Settings } from '../class/Settings';
-import { SettingsAnalytics, SettingsAnalyticsValues } from '../class/SettingsAnalytics';
 import { SettingsWizard } from '../class/SettingsWizard';
 import { Shared } from '../class/Shared';
 import { ToggleSwitch } from '../class/ToggleSwitch';
@@ -155,20 +154,6 @@ class SettingsModule {
 		])
 			.insert(buttonGroup, 'beforeend')
 			.hide();
-		Button.create({
-			color: 'green',
-			icons: [],
-			name: 'Reset Analytics',
-			onClick: async () => {
-				const analytics = /** @type {SettingsAnalyticsValues} */ (JSON.parse(
-					Shared.common.getValue('settingsAnalytics', '{"enabled":true}')
-				));
-				analytics.enabled = true;
-				analytics.lastSubmission = 0;
-				await Shared.common.setValue('settingsAnalytics', JSON.stringify(analytics));
-				SettingsAnalytics.check();
-			},
-		}).insert(buttonGroup, 'beforeend');
 
 		Container.setAttribute('data-esgst-popup', true);
 		const items = [
@@ -412,6 +397,14 @@ class SettingsModule {
 							this.requiredPermissions = {};
 						}
 						await Shared.common.lockAndSaveSettings(this.toSave);
+						const adareqlimChanged = Object.keys(this.toSave).some((key) =>
+							key.startsWith('customAdaReqLim')
+						);
+						if (adareqlimChanged) {
+							await browser.runtime.sendMessage({
+								action: 'update_adareqlim',
+							});
+						}
 						this.toSave = {};
 						new Popup({
 							icon: 'fa-check',
@@ -1134,7 +1127,6 @@ class SettingsModule {
 					uf_s_s: `User Filters (Single Filters Switch)`,
 					ugs: 'Unsent Gifts Sender',
 					usc: 'User Suspension Checker',
-					ust: 'User Suspension Tracker',
 					wbc: 'Whitelist/Blacklist Checker',
 					wbm: 'Whitelist/Blacklist Manager',
 					wbsAsc: `Whitelist/Blacklist Sorter (Ascending)`,

@@ -1,4 +1,5 @@
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
 import { Logger } from '../../class/Logger';
 import { Module } from '../../class/Module';
 import { permissions } from '../../class/Permissions';
@@ -1501,16 +1502,12 @@ class CommentsCommentFormattingHelper extends Module {
 	}
 
 	async cfh_readImgur(authorization, popout, popup, reader, url, warning, callback) {
-		let responseJson = JSON.parse(
-			(
-				await Shared.common.request({
-					data: `image=${encodeURIComponent(reader.result.match(/base64,(.+)/)[1])}`,
-					headers: { authorization },
-					method: 'POST',
-					url: `https://api.imgur.com/3/image`,
-				})
-			).responseText
-		);
+		let responseJson = (
+			await FetchRequest.post(`https://api.imgur.com/3/image`, {
+				data: `image=${encodeURIComponent(reader.result.match(/base64,(.+)/)[1])}`,
+				headers: { authorization },
+			})
+		).json;
 		if (responseJson.success) {
 			callback();
 			popup.close();
@@ -1659,16 +1656,18 @@ class CommentsCommentFormattingHelper extends Module {
 					<i
 						className="esgst-clickable fa fa-retweet"
 						title="Replace description with current reply"
-						onclick={this.cfh_saveReply(
-							reply,
-							savedReply.description,
-							this.esgst.cfh.textArea,
-							savedReply.name,
-							null,
-							null,
-							replies,
-							summary
-						)}
+						onclick={() =>
+							this.cfh_saveReply(
+								reply,
+								savedReply.description,
+								this.esgst.cfh.textArea,
+								savedReply.name,
+								null,
+								null,
+								replies,
+								summary
+							)
+						}
 					></i>
 					<i
 						className="esgst-clickable fa fa-edit"
@@ -1740,17 +1739,17 @@ class CommentsCommentFormattingHelper extends Module {
 			{
 				template: 'success',
 				name: 'Save',
-				onClick: this.cfh_saveReply.bind(
-					this,
-					reply,
-					description,
-					descriptionArea,
-					name,
-					nameArea,
-					popup,
-					replies,
-					summary
-				),
+				onClick: () =>
+					this.cfh_saveReply(
+						null,
+						description,
+						descriptionArea,
+						name,
+						nameArea,
+						popup,
+						replies,
+						summary
+					),
 			},
 			{
 				template: 'loading',

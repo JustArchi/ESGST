@@ -1,10 +1,9 @@
 import { DOM } from '../class/DOM';
 import { EventDispatcher } from '../class/EventDispatcher';
+import { ISession, Session } from '../class/Session';
 import { Events } from '../constants/Events';
 import { Namespaces } from '../constants/Namespaces';
-import { ISession, Session } from '../class/Session';
-import { User } from './User';
-import { Utils } from '../lib/jsUtils';
+import { User } from '../models/User';
 
 class IHeader {
 	constructor() {
@@ -155,7 +154,7 @@ class SgHeader extends IHeader {
 				>
 					<a
 						className="nav__button"
-						href={params.url}
+						href={params.url || null}
 						target={params.openInNewTab ? '_blank' : null}
 						title={params.buttonName}
 					>
@@ -176,7 +175,7 @@ class SgHeader extends IHeader {
 				<div className="nav__button-container" ref={(ref) => (buttonContainerNode = ref)}>
 					<a
 						className="nav__button"
-						href={params.url}
+						href={params.url || null}
 						target={params.openInNewTab ? '_blank' : null}
 					>
 						{params.buttonName}
@@ -366,8 +365,13 @@ class SgHeader extends IHeader {
 			} else {
 				buttonContainer.data.buttonName = 'Avatar';
 
-				buttonContainer.user = new User(Namespaces.SG);
-				buttonContainer.user.parse(buttonContainer.nodes.outer);
+				const user = User.create(Namespaces.SG);
+				user.nodes.outer = buttonContainer.nodes.outer;
+				user.nodes.avatarOuter = user.nodes.outer.querySelector('.nav__avatar-outer-wrap');
+				user.nodes.avatarInner = user.nodes.avatarOuter.querySelector('.nav__avatar-inner-wrap');
+				user.parseData();
+				user.parseExtraData();
+				buttonContainer.user = user;
 
 				if (Session.namespace === Namespaces.SG) {
 					Session.user = Object.assign({}, buttonContainer.user.data);
@@ -679,7 +683,11 @@ class StHeader extends IHeader {
 				context,
 				position,
 				<div className="nav_btn_container" ref={(ref) => (buttonContainerNode = ref)}>
-					<a className="nav_btn" href={params.url} target={params.openInNewTab ? '_blank' : null}>
+					<a
+						className="nav_btn"
+						href={params.url || null}
+						target={params.openInNewTab ? '_blank' : null}
+					>
 						{params.buttonIcon ? <i className={params.buttonIcon}></i> : null}
 						{params.buttonImage ? <img src={params.buttonImage} /> : null}
 						{params.counter ? (
@@ -695,7 +703,11 @@ class StHeader extends IHeader {
 				context,
 				position,
 				<div className="nav_btn_container" ref={(ref) => (buttonContainerNode = ref)}>
-					<a className="nav_btn" href={params.url} target={params.openInNewTab ? '_blank' : null}>
+					<a
+						className="nav_btn"
+						href={params.url || null}
+						target={params.openInNewTab ? '_blank' : null}
+					>
 						{params.buttonIcon ? <i className={params.buttonIcon}></i> : null}
 						{params.buttonImage ? <img src={params.buttonImage} /> : null}
 						<span>
@@ -870,8 +882,12 @@ class StHeader extends IHeader {
 			} else {
 				buttonContainer.data.buttonName = 'Avatar';
 
-				buttonContainer.user = new User(Namespaces.ST);
-				buttonContainer.user.parse(buttonContainer.nodes.outer);
+				const user = User.create(Namespaces.ST);
+				user.nodes.outer = buttonContainer.nodes.outer;
+				user.nodes.avatarOuter = user.nodes.outer;
+				user.parseData();
+				user.parseExtraData();
+				buttonContainer.user = user;
 
 				if (Session.namespace === Namespaces.ST) {
 					Session.user = Object.assign({}, buttonContainer.user.data);

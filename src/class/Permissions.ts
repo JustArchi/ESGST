@@ -34,7 +34,6 @@ class Permissions {
 			github: {
 				isOrigin: true,
 				messages: {
-					showMessages: 'Required to retrieve important messages from GitHub.',
 					showChangelog: 'Required to retrieve the changelog from GitHub when updating.',
 				},
 				values: ['*://*.github.com/*', '*://*.raw.githubusercontent.com/*'],
@@ -49,10 +48,7 @@ class Permissions {
 			googleWebApp: {
 				isOrigin: true,
 				messages: {
-					namwc:
-						"Required by Not Activated / Multiple Wins Checker to retrieve the user's suspensions from the database.",
 					sync: 'Required to sync HLTB times.',
-					ust: 'Required by User Suspension Tracker to send tickets to the database.',
 				},
 				values: ['*://*.script.google.com/*', '*://*.script.googleusercontent.com/*'],
 			},
@@ -101,7 +97,7 @@ class Permissions {
 						'Optional for Hidden Game Manager to hide games, by converting Steam app IDs to SteamGifts game IDs.',
 					mm: 'Optional for Multi Manager to hide games.',
 				},
-				values: ['*://*.rafaelgssa.com/*'],
+				values: ['*://*.esgst.rafaelgomes.xyz/*'],
 			},
 			steamApi: {
 				isOrigin: true,

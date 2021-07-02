@@ -1,8 +1,10 @@
 import { Checkbox } from '../class/Checkbox';
 import { DOM } from '../class/DOM';
+import { FetchRequest } from '../class/FetchRequest';
 import { Logger } from '../class/Logger';
 import { Module } from '../class/Module';
 import { Popup } from '../class/Popup';
+import { Scope } from '../class/Scope';
 import { Session } from '../class/Session';
 import { Settings } from '../class/Settings';
 import { Shared } from '../class/Shared';
@@ -15,7 +17,6 @@ import { SYNC_KEYS } from './Sync';
 const createElements = common.createElements.bind(common),
 	createFadeMessage = common.createElements.bind(common),
 	getFeatureTooltip = common.getFeatureTooltip.bind(common),
-	request = common.request.bind(common),
 	setSetting = common.setSetting.bind(common);
 class Filters extends Module {
 	constructor(id) {
@@ -1123,7 +1124,7 @@ class Filters extends Module {
 						check.classList.add('esgst-hidden');
 						spinning.classList.remove('esgst-hidden');
 						await setSetting(filter.id, select.value);
-						await request({
+						await FetchRequest.post('/account/settings/giveaways', {
 							data: `filter_os=${Settings.get(
 								'filter_os'
 							)}&filter_giveaways_exist_in_account=${Settings.get(
@@ -1135,8 +1136,6 @@ class Filters extends Module {
 							)}&filter_giveaways_additional_games=${Settings.get(
 								'filter_giveaways_additional_games'
 							)}&xsrf_token=${Session.xsrfToken}`,
-							method: 'POST',
-							url: '/account/settings/giveaways',
 						});
 						spinning.classList.add('esgst-hidden');
 						check.classList.remove('esgst-hidden');
@@ -1147,7 +1146,7 @@ class Filters extends Module {
 						check.classList.add('esgst-hidden');
 						spinning.classList.remove('esgst-hidden');
 						await setSetting(filter.id, checkbox.value ? 1 : 0);
-						await request({
+						await FetchRequest.post('/account/settings/giveaways', {
 							data: `filter_os=${Settings.get(
 								'filter_os'
 							)}&filter_giveaways_exist_in_account=${Settings.get(
@@ -1159,8 +1158,6 @@ class Filters extends Module {
 							)}&filter_giveaways_additional_games=${Settings.get(
 								'filter_giveaways_additional_games'
 							)}&xsrf_token=${Session.xsrfToken}`,
-							method: 'POST',
-							url: '/account/settings/giveaways',
 						});
 						spinning.classList.add('esgst-hidden');
 						check.classList.remove('esgst-hidden');
@@ -2368,17 +2365,17 @@ class Filters extends Module {
 		Shared.common.purgeRemovedElements();
 		let items;
 		if (obj.id === 'gf') {
-			items = this.esgst.currentScope.giveaways;
+			items = Scope.findData('current', 'giveaways');
 		} else if (obj.id === 'df') {
-			items = this.esgst.currentScope.discussions;
+			items = Scope.findData('current', 'discussions');
 		} else if (obj.id === 'tf') {
-			items = this.esgst.currentScope.trades;
+			items = Scope.findData('current', 'trades');
 		} else if (obj.id === 'gmf') {
-			items = this.esgst.currentScope.games.map((game) => game.game);
+			items = Scope.findData('current', 'games').map((game) => game.game);
 		} else if (obj.id === 'gpf') {
-			items = this.esgst.currentScope.groups;
+			items = Scope.findData('current', 'groups');
 		} else {
-			items = this.esgst.currentScope.comments;
+			items = Scope.findData('current', 'comments');
 		}
 		const counters = document.getElementsByClassName('esgst-gf-filter-count');
 		for (const counter of counters) {
@@ -2545,9 +2542,6 @@ class Filters extends Module {
 			case 'date':
 			case 'integer':
 			case 'double': {
-				if (key === 'minutesToEnd' && (item.ended || item.deleted)) break;
-				if (key === 'minutesFromStart' && !item.started) break;
-
 				const ruleValue = rules.type === 'date' ? new Date(rules.value).getTime() : rules.value;
 
 				const value =

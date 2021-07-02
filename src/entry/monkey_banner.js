@@ -1,12 +1,12 @@
 /* @preserve
 // ==UserScript==
 // @name Enhanced SteamGifts & SteamTrades (ESGST)
-// @namespace https://rafaelgssa.github.io/esgst
+// @namespace https://rafaelgomesxyz.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
 // @version <% package.version %>
 // @author <% package.author %>
-// @contributor Royalgamer06
+// @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
 // @downloadURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.user.js
 // @match https://www.steamgifts.com/*
@@ -23,7 +23,7 @@
 // @connect googleapis.com
 // @connect graph.microsoft.com
 // @connect isthereanydeal.com
-// @connect rafaelgssa.com
+// @connect esgst.rafaelgomes.xyz
 // @connect raw.githubusercontent.com
 // @connect script.google.com
 // @connect script.googleusercontent.com

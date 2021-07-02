@@ -1,4 +1,5 @@
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
 import { Module } from '../../class/Module';
 import { permissions } from '../../class/Permissions';
 import { Popout } from '../../class/Popout';
@@ -15,11 +16,9 @@ const createElements = common.createElements.bind(common),
 	createOptions = common.createOptions.bind(common),
 	createResults = common.createResults.bind(common),
 	getFeatureTooltip = common.getFeatureTooltip.bind(common),
-	getSuspensions = common.getSuspensions.bind(common),
 	getTimestamp = common.getTimestamp.bind(common),
 	getUser = common.getUser.bind(common),
 	getValue = common.getValue.bind(common),
-	request = common.request.bind(common),
 	saveUser = common.saveUser.bind(common),
 	saveUsers = common.saveUsers.bind(common);
 class UsersNotActivatedMultipleWinChecker extends Module {
@@ -338,10 +337,6 @@ class UsersNotActivatedMultipleWinChecker extends Module {
 	}
 
 	async namwc_start(obj) {
-		if (Settings.get('ust') && !(await permissions.contains([['googleWebApp']]))) {
-			return;
-		}
-
 		obj.isCanceled = false;
 		obj.button.classList.add('esgst-busy');
 		obj.popup.progressBar.setLoading(null).show();
@@ -499,115 +494,6 @@ class UsersNotActivatedMultipleWinChecker extends Module {
 			return;
 		}
 
-		if (!Settings.get('ust') || obj.isMenu) {
-			obj.button.classList.remove('esgst-busy');
-			obj.popup.progressBar.reset().hide();
-			obj.popup.overallProgressBar.setSuccess('All users checked!');
-			obj.popup.setDone();
-			return;
-		}
-
-		// check for suspensions
-		obj.popup.progressBar.setMessage('Checking suspensions...');
-		users = [];
-		let savedUsers = JSON.parse(getValue('users'));
-		let suspensions = (await getSuspensions(steamIds)).suspensions;
-		for (let steamId in suspensions) {
-			let suspension = suspensions[steamId];
-			let user = { steamId };
-			user.values = {
-				namwc: (await getUser(savedUsers, user)).namwc,
-			};
-			user.values.namwc.suspension = suspension;
-			users.push(user);
-			if (Array.isArray(user.values.namwc.results.notActivated)) {
-				let i, n;
-				for (
-					i = 0, n = user.values.namwc.results.notActivated.length;
-					i < n && user.values.namwc.results.notActivated[i] <= suspension.notActivated;
-					i++
-				) {}
-				if (i > 0) {
-					createElements(userElements[steamId].notActivated, 'beforeend', [
-						{
-							attributes: {
-								title: getFeatureTooltip(
-									'ust',
-									`This user already served suspension for ${i} of their not activated wins (until ${getTimestamp(
-										suspension.notActivated,
-										true,
-										true
-									)})`
-								),
-							},
-							text: `[-${i}]`,
-							type: 'span',
-						},
-					]);
-				} else if (userElements[steamId].activated) {
-					createElements(userElements[steamId].activated, 'beforeend', [
-						{
-							attributes: {
-								title: getFeatureTooltip(
-									'ust',
-									`This user already served suspension for not activated wins until ${getTimestamp(
-										suspension.notActivated,
-										true,
-										true
-									)}`
-								),
-							},
-							text: `[x]`,
-							type: 'span',
-						},
-					]);
-				}
-			}
-			if (Array.isArray(user.values.namwc.results.multiple)) {
-				let i, n;
-				for (
-					i = 0, n = user.values.namwc.results.multiple.length;
-					i < n && user.values.namwc.results.multiple[i] <= suspension.multiple;
-					i++
-				) {}
-				if (i > 0) {
-					createElements(userElements[steamId].multiple, 'beforeend', [
-						{
-							attributes: {
-								title: getFeatureTooltip(
-									'ust',
-									`This user already served suspension for ${i} of their multiple wins (until ${getTimestamp(
-										suspension.multiple,
-										true,
-										true
-									)})`
-								),
-							},
-							text: `[-${i}]`,
-							type: 'span',
-						},
-					]);
-				} else if (userElements[steamId].notMultiple) {
-					createElements(userElements[steamId].notMultiple, 'beforeend', [
-						{
-							attributes: {
-								title: getFeatureTooltip(
-									'ust',
-									`This user already served suspension for multiple wins until ${getTimestamp(
-										suspension.multiple,
-										true,
-										true
-									)}`
-								),
-							},
-							text: `[x]`,
-							type: 'span',
-						},
-					]);
-				}
-			}
-		}
-		await saveUsers(users);
 		obj.button.classList.remove('esgst-busy');
 		obj.popup.progressBar.reset().hide();
 		obj.popup.overallProgressBar.setSuccess('All users checked!');
@@ -626,20 +512,19 @@ class UsersNotActivatedMultipleWinChecker extends Module {
 		if (obj.popup.progressBar) {
 			obj.popup.progressBar.setMessage(`Retrieving ${user.username}'s not activated wins...`);
 		}
-		let responseText = (
-			await request({
-				method: 'GET',
+		const response = await FetchRequest.get(
+			`http://www.sgtools.info/nonactivated/${user.username}`,
+			{
 				queue: true,
-				url: `http://www.sgtools.info/nonactivated/${user.username}`,
-			})
-		).responseText;
-		if (responseText.match(/has a private profile/)) {
+			}
+		);
+		if (response.text.match(/has a private profile/)) {
 			user.values.namwc.results.activated = 0;
 			user.values.namwc.results.notActivated = [];
 			user.values.namwc.results.unknown = 1;
 		} else {
 			user.values.namwc.results.notActivated = [];
-			let elements = DOM.parse(responseText).getElementsByClassName('notActivatedGame');
+			let elements = response.html.getElementsByClassName('notActivatedGame');
 			let n = elements.length;
 			for (let i = 0; i < n; ++i) {
 				user.values.namwc.results.notActivated.push(
@@ -661,20 +546,16 @@ class UsersNotActivatedMultipleWinChecker extends Module {
 			obj.popup.progressBar.setMessage(`Retrieving ${user.username}'s multiple wins...`);
 		}
 		user.values.namwc.results.multiple = [];
-		let elements = DOM.parse(
-			(
-				await request({
-					method: 'GET',
-					queue: true,
-					url: `http://www.sgtools.info/multiple/${user.username}`,
-				})
-			).responseText
-		).getElementsByClassName('multiplewins');
+		let elements = (
+			await FetchRequest.get(`http://www.sgtools.info/multiple/${user.username}`, {
+				queue: true,
+			})
+		).html?.getElementsByClassName('multiplewins');
 		let n = elements.length;
 		for (let i = 0; i < n; ++i) {
 			user.values.namwc.results.multiple.push(
 				new Date(
-					elements[i].textContent.match(/and\s(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\)/)[1]
+					elements[i].textContent.match(/,\s(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})\)/)[1]
 				).getTime()
 			);
 		}

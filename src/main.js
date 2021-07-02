@@ -3,14 +3,12 @@
 // that will append styles to page in runtime
 import './assets/styles';
 import { browser } from './browser';
-import { DOM } from './class/DOM';
 import { esgst } from './class/Esgst';
+import { FetchRequest } from './class/FetchRequest';
 import { Logger } from './class/Logger';
-import { MessageNotifier } from './class/MessageNotifier';
 import { persistentStorage } from './class/PersistentStorage';
 import { Session } from './class/Session';
 import { Settings } from './class/Settings';
-import { SettingsAnalytics } from './class/SettingsAnalytics';
 import { Shared } from './class/Shared';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
@@ -51,15 +49,6 @@ import { runSilentSync } from './modules/Sync';
 				case 'storageChanged':
 					Shared.common.getChanges(message.values.changes, message.values.areaName);
 					break;
-				case 'storageSaved':
-					if (Shared.header) {
-						Shared.header.buttonContainers['esgst'].dropdownItems[
-							'currentVersion'
-						].nodes.description.textContent = `Last saved on ${new Date(
-							message.values
-						).toLocaleString()}. Click to force a save.`;
-					}
-					break;
 				case 'update':
 					common.createConfirmation(
 						`Hi! A new version of ESGST (${message.values.version}) is available. Do you want to force an update now? If you choose to force an update, ESGST will stop working in any SteamGifts/SteamTrades tab that is open, along with any operation that you might be performing (such as syncing, checking something etc), so you will have to refresh them. If you choose not to force an update, your browser will automatically update the extension when you are not using it (for example, when you restart the browser).`,
@@ -73,23 +62,17 @@ import { runSilentSync } from './modules/Sync';
 		});
 
 		// set default values or correct values
+		await browser.runtime.sendMessage({
+			action: 'register_tab',
+			url: window.location.href,
+		});
 		/**
 		 * @property {object} esgst.storage.Emojis
 		 * @property {object} esgst.storage.filterPresets
 		 * @property {object} esgst.storage.dfPresets
 		 */
-		const storage = await browser.runtime.sendMessage({
-			action: 'get_storage',
-			url: window.location.href,
-		});
-		if (storage && storage !== 'null') {
-			esgst.storage = JSON.parse(storage);
-			esgst.isTemporaryStorage = true;
-		} else {
-			esgst.storage = await browser.storage.local.get(null);
-			esgst.isTemporaryStorage = false;
-			browser.storage.onChanged.addListener(Shared.common.getChanges.bind(Shared.common));
-		}
+		esgst.storage = await browser.storage.local.get(null);
+		browser.storage.onChanged.addListener(Shared.common.getChanges.bind(Shared.common));
 
 		esgst.features = common.getFeatures();
 		[esgst.featuresById, esgst.featuresAncestors] = common.getFeaturesById();
@@ -110,13 +93,15 @@ import { runSilentSync } from './modules/Sync';
 		esgst.trades = JSON.parse(esgst.storage.trades);
 		esgst.users = JSON.parse(esgst.storage.users);
 		esgst.winners = JSON.parse(esgst.storage.winners);
-		esgst.notifiedMessages = JSON.parse(esgst.storage.notifiedMessages);
 
-		if (document.readyState === 'loading') {
-			document.addEventListener('DOMContentLoaded', load);
-		} else {
-			// noinspection JSIgnoredPromiseFromCall
+		if (document.readyState === 'complete') {
 			load();
+		} else {
+			document.addEventListener('readystatechange', (e) => {
+				if (e.target && e.target.readyState === 'complete') {
+					load();
+				}
+			});
 		}
 	}
 
@@ -148,15 +133,9 @@ import { runSilentSync } from './modules/Sync';
 				}
 
 				if (!esgst.settings.registrationDate_sg || !esgst.settings.steamId) {
-					const responseHtml = DOM.parse(
-						(
-							await common.request({
-								method: 'GET',
-								url: `https://www.steamgifts.com/user/${esgst.settings.username_sg}`,
-							})
-						).responseText
-					);
-
+					const responseHtml = (
+						await FetchRequest.get(`https://www.steamgifts.com/user/${esgst.settings.username_sg}`)
+					).html;
 					const elements = responseHtml.getElementsByClassName('featured__table__row__left');
 
 					for (const element of elements) {
@@ -305,12 +284,6 @@ import { runSilentSync } from './modules/Sync';
 		await common.addHeaderMenu();
 
 		common.checkNewVersion();
-
-		SettingsAnalytics.check();
-
-		if (Settings.get('showMessages')) {
-			await MessageNotifier.notify(esgst.notifiedMessages);
-		}
 
 		await common.loadFeatures(esgst.modules);
 	}

@@ -3,6 +3,7 @@ import { Checkbox } from '../class/Checkbox';
 import { DOM } from '../class/DOM';
 import { FetchRequest } from '../class/FetchRequest';
 import { LocalStorage } from '../class/LocalStorage';
+import { Lock } from '../class/Lock';
 import { Logger } from '../class/Logger';
 import { permissions } from '../class/Permissions';
 import { Popup } from '../class/Popup';
@@ -245,7 +246,9 @@ async function setSync(isPopup = false, isSilent = false) {
 						{checkbox.checkbox} <span>{info.name}</span>
 					</div>
 				);
-				setAutoSync(info.key, info.name, syncer);
+				if (info.key !== 'HiddenGames' && info.key !== 'Whitelist' && info.key !== 'Blacklist') {
+					setAutoSync(info.key, info.name, syncer);
+				}
 				addNotificationBars(syncer, info);
 			}
 		}
@@ -420,10 +423,64 @@ function cancelSync(syncer) {
 
 //use: syncer.results, syncer.progressBar, syncer.parameters
 async function sync(syncer) {
+	const now = Date.now();
+
+	if (
+		(syncer.parameters && syncer.parameters.HiddenGames) ||
+		(!syncer.parameters && Settings.get('syncHiddenGames'))
+	) {
+		if (now - Settings.get('lastSyncHiddenGames') > 2592000000) {
+			if (Settings.get('lastPageHiddenGames') === 0) {
+				const doContinue = await Shared.common.createConfirmationAsync(
+					`WARNING: You are going to sync your hidden games. This is a process that may take a very long time, depending on how many games you have on your list, as the requests will be limited to 1 per second to avoid making a lot of requests to SteamGifts in a short period of time. Also keep in mind that this is a cumulative sync, which means that if you cancel the sync and sync again later, it will pick up from where it left off.${
+						Settings.get('lastSyncHiddenGames') > 0
+							? ' Since you have already synced your hidden games once before, you do not need to do it ever again, because ESGST detects when you add/remove a game to/from the list and automatically updates your data.'
+							: ''
+					} If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable hidden games sync. You can only sync your hidden games once per 30 days.`
+				);
+				if (!doContinue) {
+					return;
+				}
+			}
+		} else {
+			Shared.common.createAlert(
+				'WARNING: You have synced your hidden games in the last 30 days. Please disable it in order to continue.'
+			);
+			return;
+		}
+	}
+	if (
+		(syncer.parameters && (syncer.parameters.Whitelist || syncer.parameters.Blacklist)) ||
+		(!syncer.parameters && (Settings.get('syncWhitelist') || Settings.get('syncBlacklist')))
+	) {
+		if (
+			now - Settings.get('lastSyncWhitelist') > 2592000000 &&
+			now - Settings.get('lastSyncBlacklist') > 2592000000
+		) {
+			if (Settings.get('lastPageWhitelist') === 0 || Settings.get('lastPageBlacklist') === 0) {
+				const doContinue = await Shared.common.createConfirmationAsync(
+					`WARNING: You are going to sync your whitelist or blacklist. This is a process that may take a very long time, depending on how many users you have on your list, as the requests will be limited to 1 per second to avoid making a lot of requests to SteamGifts in a short period of time. Also keep in mind that this is a cumulative sync, which means that if you cancel the sync and sync again later, it will pick up from where it left off.${
+						Settings.get('lastSyncWhitelist') > 0 || Settings.get('lastSyncBlacklist') > 0
+							? ' Since you have already synced your whitelist or blacklist once before, you do not need to do it ever again, because ESGST detects when you add/remove a user to/from the list and automatically updates your data.'
+							: ''
+					} If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable whitelist or blacklist sync. You can only sync your whitelist or blacklist once per 30 days.`
+				);
+				if (!doContinue) {
+					return;
+				}
+			}
+		} else {
+			Shared.common.createAlert(
+				'WARNING: You have synced your whitelist or blacklist in the last 30 days. Please disable it in order to continue.'
+			);
+			return;
+		}
+	}
+
 	syncer.canceled = false;
 
 	if (!Shared.esgst.isFirstRun) {
-		await Shared.common.setSetting('lastSync', Date.now());
+		await Shared.common.setSetting('lastSync', now);
 		syncer.results.innerHTML = '';
 		syncer.progressBar.setLoading(null).show();
 	}
@@ -479,14 +536,11 @@ async function sync(syncer) {
 		let pagination = null;
 		do {
 			let elements, responseHtml;
-			responseHtml = DOM.parse(
-				(
-					await Shared.common.request({
-						method: 'GET',
-						url: `https://www.steamgifts.com/account/steam/groups/search?page=${nextPage}`,
-					})
-				).responseText
-			);
+			responseHtml = (
+				await FetchRequest.get(
+					`https://www.steamgifts.com/account/steam/groups/search?page=${nextPage}`
+				)
+			).html;
 			elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
 			for (let i = 0, n = elements.length; !syncer.canceled && i < n; i++) {
 				let code, element, heading, name;
@@ -510,14 +564,7 @@ async function sync(syncer) {
 					avatar = element
 						.getElementsByClassName('table_image_avatar')[0]
 						.style.backgroundImage.match(/\/avatars\/(.+)_medium/)[1];
-					steamId = DOM.parse(
-						(
-							await Shared.common.request({
-								method: 'GET',
-								url: `/group/${code}/`,
-							})
-						).responseText
-					)
+					steamId = (await FetchRequest.get(`/group/${code}/`)).html
 						.getElementsByClassName('sidebar__shortcut-inner-wrap')[0]
 						.firstElementChild.getAttribute('href')
 						.match(/\d+/)[0];
@@ -596,57 +643,58 @@ async function sync(syncer) {
 
 	// sync whitelist and blacklist
 	if (
-		(syncer.parameters && (syncer.parameters.Whitelist || syncer.parameters.Blacklist)) ||
-		(!syncer.parameters && (Settings.get('syncWhitelist') || Settings.get('syncBlacklist')))
+		(((syncer.parameters && syncer.parameters.Whitelist) ||
+			(!syncer.parameters && Settings.get('syncWhitelist'))) &&
+			(now - Settings.get('lastSyncWhitelist') > 2592000000 ||
+				Settings.get('lastPageWhitelist') > 0)) ||
+		(((syncer.parameters && syncer.parameters.Blacklist) ||
+			(!syncer.parameters && Settings.get('syncBlacklist'))) &&
+			(now - Settings.get('lastSyncBlacklist') > 2592000000 ||
+				Settings.get('lastPageBlacklist') > 0))
 	) {
 		if (
-			(syncer.parameters && syncer.parameters.Whitelist && syncer.parameters.Blacklist) ||
-			(!syncer.parameters && Settings.get('syncWhitelist') && Settings.get('syncBlacklist'))
-		) {
-			await Shared.common.deleteUserValues([
-				'whitelisted',
-				'whitelistedDate',
-				'blacklisted',
-				'blacklistedDate',
-			]);
-			syncer.users = [];
-			syncer.progressBar.setMessage('Syncing your whitelist...');
-			await syncWhitelistBlacklist(
-				'whitelisted',
-				syncer,
-				`https://www.steamgifts.com/account/manage/whitelist/search?page=`
-			);
-			syncer.progressBar.setMessage('Syncing your blacklist...');
-			await syncWhitelistBlacklist(
-				'blacklisted',
-				syncer,
-				`https://www.steamgifts.com/account/manage/blacklist/search?page=`
-			);
-		} else if (
 			(syncer.parameters && syncer.parameters.Whitelist) ||
 			(!syncer.parameters && Settings.get('syncWhitelist'))
 		) {
-			await Shared.common.deleteUserValues(['whitelisted', 'whitelistedDate']);
-			syncer.users = [];
+			if (Settings.get('lastPageWhitelist') === 0) {
+				await Shared.common.deleteUserValues(['whitelisted', 'whitelistedDate']);
+			}
 			syncer.progressBar.setMessage('Syncing your whitelist...');
 			await syncWhitelistBlacklist(
 				'whitelisted',
 				syncer,
 				`https://www.steamgifts.com/account/manage/whitelist/search?page=`
 			);
-		} else {
-			await Shared.common.deleteUserValues(['blacklisted', 'blacklistedDate']);
-			syncer.users = [];
+			if (!syncer.canceled) {
+				await Shared.common.setSetting('lastPageWhitelist', 0);
+			}
+		}
+
+		if (syncer.canceled) {
+			return;
+		}
+
+		if (
+			(syncer.parameters && syncer.parameters.Blacklist) ||
+			(!syncer.parameters && Settings.get('syncBlacklist'))
+		) {
+			if (Settings.get('lastPageBlacklist') === 0) {
+				await Shared.common.deleteUserValues(['blacklisted', 'blacklistedDate']);
+			}
 			syncer.progressBar.setMessage('Syncing your blacklist...');
 			await syncWhitelistBlacklist(
 				'blacklisted',
 				syncer,
 				`https://www.steamgifts.com/account/manage/blacklist/search?page=`
 			);
+			if (!syncer.canceled) {
+				await Shared.common.setSetting('lastPageBlacklist', 0);
+			}
 		}
-		syncer.progressBar.setMessage(`Saving your whitelist/blacklist (this may take a while)...`);
-		await Shared.common.saveUsers(syncer.users);
-		DOM.insert(syncer.results, 'beforeend', <div>Whitelist/blacklist synced.</div>);
+
+		if (!syncer.canceled) {
+			DOM.insert(syncer.results, 'beforeend', <div>Whitelist/blacklist synced.</div>);
+		}
 	}
 
 	// if sync has been canceled stop
@@ -665,14 +713,12 @@ async function sync(syncer) {
 				const users = [];
 				syncer.progressBar.setMessage('Syncing your Steam friends...');
 				await Shared.common.deleteUserValues(['steamFriend']);
-				const response = await Shared.common.request({
-					method: 'GET',
-					url: `http://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${Settings.get(
+				const response = await FetchRequest.get(
+					`http://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${Settings.get(
 						'steamApiKey'
-					)}&steamid=${Settings.get('steamId')}&relationship=friend`,
-				});
-				const json = JSON.parse(response.responseText);
-				for (const friend of json.friendslist.friends) {
+					)}&steamid=${Settings.get('steamId')}&relationship=friend`
+				);
+				for (const friend of response.json.friendslist.friends) {
 					users.push({
 						steamId: friend.steamid,
 						values: {
@@ -707,69 +753,83 @@ async function sync(syncer) {
 
 	// sync hidden games
 	if (
-		(syncer.parameters && syncer.parameters.HiddenGames) ||
-		(!syncer.parameters && Settings.get('syncHiddenGames'))
+		((syncer.parameters && syncer.parameters.HiddenGames) ||
+			(!syncer.parameters && Settings.get('syncHiddenGames'))) &&
+		(now - Settings.get('lastSyncHiddenGames') > 2592000000 ||
+			Settings.get('lastPageHiddenGames') > 0)
 	) {
 		syncer.progressBar.setMessage('Syncing your hidden games...');
-		syncer.hiddenGames = {
-			apps: [],
-			subs: [],
-		};
-		let nextPage = 1;
+		if (Settings.get('lastPageHiddenGames') === 0) {
+			const lock = new Lock('game', { threshold: 300 });
+			await lock.lock();
+			let savedGames = JSON.parse(Shared.common.getValue('games'));
+			for (let key in savedGames.apps) {
+				if (savedGames.apps.hasOwnProperty(key)) {
+					delete savedGames.apps[key].hidden;
+				}
+			}
+			for (let key in savedGames.subs) {
+				if (savedGames.subs.hasOwnProperty(key)) {
+					delete savedGames.subs[key].hidden;
+				}
+			}
+			await Shared.common.setValue('games', JSON.stringify(savedGames));
+			await lock.unlock();
+		}
+		let nextPage =
+			Settings.get('lastPageHiddenGames') > 0 ? Settings.get('lastPageHiddenGames') : 1;
 		let pagination = null;
 		do {
+			const hiddenGames = {
+				apps: [],
+				subs: [],
+			};
 			let elements, responseHtml;
-			responseHtml = DOM.parse(
-				(
-					await Shared.common.request({
-						method: 'GET',
-						url: `https://www.steamgifts.com/account/settings/giveaways/filters/search?page=${nextPage}`,
-					})
-				).responseText
-			);
+			syncer.progressBar.setMessage(`Syncing your hidden games (page ${nextPage})...`);
+			responseHtml = (
+				await FetchRequest.get(
+					`https://www.steamgifts.com/account/settings/giveaways/filters/search?page=${nextPage}`,
+					{ queue: true }
+				)
+			).html;
 			elements = responseHtml.querySelectorAll(
 				`.table__column__secondary-link[href*="store.steampowered.com"]`
 			);
 			for (let i = 0, n = elements.length; i < n; ++i) {
 				let match = elements[i].getAttribute('href').match(/(app|sub)\/(\d+)/);
 				if (match) {
-					syncer.hiddenGames[`${match[1]}s`].push(match[2]);
+					hiddenGames[`${match[1]}s`].push(match[2]);
 				}
 			}
 			pagination = responseHtml.getElementsByClassName('pagination__navigation')[0];
 			nextPage += 1;
+			const lock = new Lock('game', { threshold: 300 });
+			await lock.lock();
+			let savedGames = JSON.parse(Shared.common.getValue('games'));
+			for (let i = 0, n = hiddenGames.apps.length; i < n; ++i) {
+				if (!savedGames.apps[hiddenGames.apps[i]]) {
+					savedGames.apps[hiddenGames.apps[i]] = {};
+				}
+				savedGames.apps[hiddenGames.apps[i]].hidden = true;
+			}
+			for (let i = 0, n = hiddenGames.subs.length; i < n; ++i) {
+				if (!savedGames.subs[hiddenGames.subs[i]]) {
+					savedGames.subs[hiddenGames.subs[i]] = {};
+				}
+				savedGames.subs[hiddenGames.subs[i]].hidden = true;
+			}
+			await Shared.common.setValue('games', JSON.stringify(savedGames));
+			await lock.unlock();
+			await Shared.common.setSetting('lastPageHiddenGames', nextPage);
 		} while (
 			!syncer.canceled &&
 			pagination &&
 			!pagination.lastElementChild.classList.contains('is-selected')
 		);
-		let deleteLock = await Shared.common.createLock('gameLock', 300);
-		let savedGames = JSON.parse(Shared.common.getValue('games'));
-		for (let key in savedGames.apps) {
-			if (savedGames.apps.hasOwnProperty(key)) {
-				delete savedGames.apps[key].hidden;
-			}
+		if (!syncer.canceled) {
+			await Shared.common.setSetting('lastPageHiddenGames', 0);
+			DOM.insert(syncer.results, 'beforeend', <div>Hidden games synced.</div>);
 		}
-		for (let key in savedGames.subs) {
-			if (savedGames.subs.hasOwnProperty(key)) {
-				delete savedGames.subs[key].hidden;
-			}
-		}
-		for (let i = 0, n = syncer.hiddenGames.apps.length; i < n; ++i) {
-			if (!savedGames.apps[syncer.hiddenGames.apps[i]]) {
-				savedGames.apps[syncer.hiddenGames.apps[i]] = {};
-			}
-			savedGames.apps[syncer.hiddenGames.apps[i]].hidden = true;
-		}
-		for (let i = 0, n = syncer.hiddenGames.subs.length; i < n; ++i) {
-			if (!savedGames.subs[syncer.hiddenGames.subs[i]]) {
-				savedGames.subs[syncer.hiddenGames.subs[i]] = {};
-			}
-			savedGames.subs[syncer.hiddenGames.subs[i]].hidden = true;
-		}
-		await Shared.common.setValue('games', JSON.stringify(savedGames));
-		deleteLock();
-		DOM.insert(syncer.results, 'beforeend', <div>Hidden games synced.</div>);
 	}
 
 	// if sync has been canceled stop
@@ -796,19 +856,17 @@ async function sync(syncer) {
 				syncer.jsx = [];
 				let apiResponse = null;
 				if (Settings.get('steamApiKey')) {
-					apiResponse = await Shared.common.request({
-						method: 'GET',
-						url: `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${Settings.get(
+					apiResponse = await FetchRequest.get(
+						`http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${Settings.get(
 							'steamApiKey'
-						)}&steamid=${Settings.get('steamId')}&format=json`,
-					});
+						)}&steamid=${Settings.get('steamId')}&format=json`
+					);
 				}
-				let storeResponse = await Shared.common.request({
-					method: 'GET',
-					url: `http://store.steampowered.com/dynamicstore/userdata?${
+				let storeResponse = await FetchRequest.get(
+					`http://store.steampowered.com/dynamicstore/userdata?${
 						Math.random().toString().split('.')[1]
-					}`,
-				});
+					}`
+				);
 				await syncGames(null, syncer, apiResponse, storeResponse);
 				if (Settings.get('gc_o_a')) {
 					const altAccounts = Settings.get('gc_o_altAccounts');
@@ -818,12 +876,11 @@ async function sync(syncer) {
 								if (syncer.canceled) {
 									break;
 								}
-								apiResponse = await Shared.common.request({
-									method: 'GET',
-									url: `http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${Settings.get(
+								apiResponse = await FetchRequest.get(
+									`http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${Settings.get(
 										'steamApiKey'
-									)}&steamid=${altAccount.steamId}&format=json`,
-								});
+									)}&steamid=${altAccount.steamId}&format=json`
+								);
 								await syncGames(altAccount, syncer, apiResponse);
 							}
 							await Shared.common.setSetting('gc_o_altAccounts', altAccounts);
@@ -880,12 +937,8 @@ async function sync(syncer) {
 		const isPermitted = await permissions.contains([['steamCommunity']]);
 		if (isPermitted) {
 			syncer.progressBar.setMessage('Syncing your followed games...');
-			const response = await Shared.common.request({
-				method: 'GET',
-				url: `https://steamcommunity.com/my/followedgames/`,
-			});
-			const responseHtml = DOM.parse(response.responseText);
-			const elements = responseHtml.querySelectorAll('.gameListRow.followed');
+			const response = await FetchRequest.get('https://steamcommunity.com/my/followedgames/');
+			const elements = response.html.querySelectorAll('.gameListRow.followed');
 			const savedGames = JSON.parse(Shared.common.getValue('games'));
 			for (const id in savedGames.apps) {
 				if (savedGames.apps.hasOwnProperty(id)) {
@@ -1025,13 +1078,11 @@ async function sync(syncer) {
 		if (isPermitted) {
 			syncer.progressBar.setMessage('Syncing HLTB times...');
 			try {
-				const responseText = (
-					await Shared.common.request({
-						method: 'GET',
-						url: `https://script.google.com/macros/s/AKfycbysBF72c0VNylStaslLlOL7X4M0KQIgY0VVv6Q0x2vh72iGAtE/exec`,
-					})
-				).responseText;
-				const games = JSON.parse(responseText);
+				const games = (
+					await FetchRequest.get(
+						`https://script.google.com/macros/s/AKfycbysBF72c0VNylStaslLlOL7X4M0KQIgY0VVv6Q0x2vh72iGAtE/exec`
+					)
+				).json;
 				const hltb = {};
 				for (const game of games) {
 					if (game.steamId) {
@@ -1082,17 +1133,13 @@ async function sync(syncer) {
 		const isPermitted = await permissions.contains([['steamTracker']]);
 		if (isPermitted) {
 			syncer.progressBar.setMessage('Syncing delisted games...');
-			const response = await Shared.common.request({
-				method: 'GET',
-				url: `https://steam-tracker.com/api?action=GetAppListV3`,
-			});
+			const response = await FetchRequest.get('https://steam-tracker.com/api?action=GetAppListV3');
 			try {
-				const json = JSON.parse(response.responseText);
-				if (json.success) {
-					const banned = json.removed_apps
+				if (response.json.success) {
+					const banned = response.json.removed_apps
 						.filter((x) => x.type === 'game' && x.category === 'Banned')
 						.map((x) => parseInt(x.appid));
-					const removed = json.removed_apps
+					const removed = response.json.removed_apps
 						.filter((x) => x.type === 'game' && x.category === 'Delisted')
 						.map((x) => parseInt(x.appid));
 					await Shared.common.setValue('delistedGames', JSON.stringify({ banned, removed }));
@@ -1214,7 +1261,6 @@ async function sync(syncer) {
 	// finish sync
 	if (!Shared.esgst.isFirstRun) {
 		syncer.progressBar.setMessage('Updating last sync date...');
-		const currentTime = Date.now();
 		let keys = [
 			'Groups',
 			'Whitelist',
@@ -1238,8 +1284,8 @@ async function sync(syncer) {
 				!syncer.failed[key] &&
 				((syncer.parameters && syncer.parameters[key]) || (!syncer.parameters && Settings.get(id)))
 			) {
-				Settings.set(`lastSync${key}`, currentTime);
-				toSave[`lastSync${key}`] = currentTime;
+				Settings.set(`lastSync${key}`, now);
+				toSave[`lastSync${key}`] = now;
 			}
 		}
 		await Shared.common.lockAndSaveSettings(toSave);
@@ -1253,7 +1299,7 @@ async function sync(syncer) {
 }
 
 async function syncReducedCvGames() {
-	const response = await FetchRequest.get('https://rafaelgssa.com/esgst/games/rcv');
+	const response = await FetchRequest.get('https://esgst.rafaelgomes.xyz/api/games/rcv');
 	const games = response.json.result.found;
 	for (const id in games.apps) {
 		if (games.apps.hasOwnProperty(id)) {
@@ -1285,7 +1331,7 @@ async function syncReducedCvGames() {
 }
 
 async function syncNoCvGames() {
-	const response = await FetchRequest.get('https://rafaelgssa.com/esgst/games/ncv');
+	const response = await FetchRequest.get('https://esgst.rafaelgomes.xyz/api/games/ncv');
 	const games = response.json.result.found;
 	for (const id in games.apps) {
 		if (games.apps.hasOwnProperty(id)) {
@@ -1317,14 +1363,14 @@ async function syncNoCvGames() {
 }
 
 async function syncWhitelistBlacklist(key, syncer, url) {
-	let nextPage = 1;
+	const name = key === 'whitelisted' ? 'Whitelist' : 'Blacklist';
+	let nextPage = Settings.get(`lastPage${key}`) > 0 ? Settings.get(`lastPage${key}`) : 1;
 	let pagination = null;
 	do {
+		const users = [];
 		let elements, responseHtml;
-		responseHtml = DOM.parse(
-			(await Shared.common.request({ method: 'GET', queue: 100, url: `${url}${nextPage}` }))
-				.responseText
-		);
+		syncer.progressBar.setMessage(`Syncing your ${name.toLowerCase()} (page ${nextPage})...`);
+		responseHtml = (await FetchRequest.get(`${url}${nextPage}`, { queue: true })).html;
 		elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
 		for (let i = 0, n = elements.length; i < n; ++i) {
 			let element, user;
@@ -1337,10 +1383,12 @@ async function syncWhitelistBlacklist(key, syncer, url) {
 			user.values[key] = true;
 			user.values[`${key}Date`] =
 				parseInt(element.querySelector(`[data-timestamp]`).getAttribute('data-timestamp')) * 1e3;
-			syncer.users.push(user);
+			users.push(user);
 		}
 		pagination = responseHtml.getElementsByClassName('pagination__navigation')[0];
 		nextPage += 1;
+		await Shared.common.saveUsers(users);
+		await Shared.common.setSetting(`lastPage${key}`, nextPage);
 	} while (
 		!syncer.canceled &&
 		pagination &&
@@ -1349,18 +1397,8 @@ async function syncWhitelistBlacklist(key, syncer, url) {
 }
 
 async function syncGames(altAccount, syncer, apiResponse, storeResponse) {
-	let apiJson = null,
-		storeJson = null;
-	try {
-		apiJson = JSON.parse(apiResponse.responseText);
-	} catch (e) {
-		/**/
-	}
-	try {
-		storeJson = JSON.parse(storeResponse.responseText);
-	} catch (e) {
-		/**/
-	}
+	const apiJson = apiResponse && apiResponse.json;
+	const storeJson = storeResponse && storeResponse.json;
 	/** @property storeJson.rgOwnedApps */
 	const hasApi =
 			apiJson && apiJson.response && apiJson.response.games && apiJson.response.games.length,
@@ -1528,15 +1566,10 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse) {
 
 		// get the wishlisted dates
 		try {
-			const responseText = (
-					await Shared.common.request({
-						method: 'GET',
-						url: `http://store.steampowered.com/wishlist/profiles/${Settings.get(
-							'steamId'
-						)}?cc=us&l=english`,
-					})
-				).responseText,
-				match = responseText.match(/g_rgWishlistData\s=\s(\[(.+?)]);/);
+			const response = await FetchRequest.get(
+				`http://store.steampowered.com/wishlist/profiles/${Settings.get('steamId')}?cc=us&l=english`
+			);
+			const match = response.text.match(/g_rgWishlistData\s=\s(\[(.+?)]);/);
 			if (match) {
 				JSON.parse(match[1]).forEach((item) => {
 					/**
@@ -1595,6 +1628,7 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse) {
 				}
 			}
 		}
+		console.log(removedWishlisted);
 		if (!altAccount) {
 			for (const id of removedWishlisted[type]) {
 				savedGames[type][id].previouslyWishlisted = true;

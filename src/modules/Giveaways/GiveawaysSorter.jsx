@@ -1,6 +1,7 @@
 import { DOM } from '../../class/DOM';
 import { Module } from '../../class/Module';
 import { Popout } from '../../class/Popout';
+import { Scope } from '../../class/Scope';
 import { Settings } from '../../class/Settings';
 import { ToggleSwitch } from '../../class/ToggleSwitch';
 import { Button } from '../../components/Button';
@@ -167,6 +168,20 @@ class GiveawaysGiveawaysSorter extends Module {
 						value: 'rating_desc',
 					},
 					text: 'Rating - Descending',
+					type: 'option',
+				},
+				{
+					attributes: {
+						value: 'ratingQuantity_asc',
+					},
+					text: 'Rating Quantity - Ascending',
+					type: 'option',
+				},
+				{
+					attributes: {
+						value: 'ratingQuantity_desc',
+					},
+					text: 'Rating Quantity - Descending',
 					type: 'option',
 				}
 			);
@@ -375,7 +390,7 @@ class GiveawaysGiveawaysSorter extends Module {
 		]);
 		options.value = Settings.get(this.esgst.gas.optionKey);
 		let callback = () =>
-			saveAndSortContent(this.esgst.currentScope.giveaways, this.esgst.gas.optionKey, options);
+			saveAndSortContent(Scope.findData('current', 'giveaways'), this.esgst.gas.optionKey, options);
 		options.addEventListener('change', callback);
 		Button.create({
 			color: 'green',

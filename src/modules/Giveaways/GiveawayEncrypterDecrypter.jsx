@@ -1,9 +1,10 @@
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
+import { Lock } from '../../class/Lock';
 import { Module } from '../../class/Module';
 import { Popup } from '../../class/Popup';
 import { Settings } from '../../class/Settings';
 import { Shared } from '../../class/Shared';
-import { Tabs } from '../../class/Tabs';
 import { Button } from '../../components/Button';
 import { PageHeading } from '../../components/PageHeading';
 import { Utils } from '../../lib/jsUtils';
@@ -11,12 +12,10 @@ import { common } from '../Common';
 
 const buildGiveaway = common.buildGiveaway.bind(common),
 	createElements = common.createElements.bind(common),
-	createLock = common.createLock.bind(common),
 	endless_load = common.endless_load.bind(common),
 	getFeatureTooltip = common.getFeatureTooltip.bind(common),
 	getValue = common.getValue.bind(common),
 	lockAndSaveGiveaways = common.lockAndSaveGiveaways.bind(common),
-	request = common.request.bind(common),
 	rot = common.rot.bind(common),
 	setValue = common.setValue.bind(common);
 class GiveawaysGiveawayEncrypterDecrypter extends Module {
@@ -96,19 +95,21 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 				isActive: true,
 				isNotification: true,
 				side: 'left',
+				url: Settings.get('ged_t')
+					? 'https://www.steamgifts.com/account/settings/profile?esgst=ged'
+					: '',
+				openInNewTab: true,
 			});
 
 			ged.button.nodes.outer.classList.add('esgst-hidden');
 			ged.button.nodes.buttonIcon.title = getFeatureTooltip('ged', 'View your decrypted giveaways');
 
-			ged.button.nodes.outer.addEventListener('click', () => {
-				if (Settings.get('ged_t')) {
-					Tabs.open(`https://www.steamgifts.com/account/settings/profile?esgst=ged`);
-				} else {
+			if (!Settings.get('ged_t')) {
+				ged.button.nodes.outer.addEventListener('click', () => {
 					ged.isPopup = true;
 					this.ged_openPopup(ged);
-				}
-			});
+				});
+			}
 			// noinspection JSIgnoredPromiseFromCall
 			this.ged_getGiveaways(ged, true);
 		}
@@ -207,7 +208,8 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 		ged.i = 0;
 		let currentGiveaways = {};
 		let currentTime = Date.now();
-		const deleteLock = await createLock('gedLock', 300);
+		const lock = new Lock('ged', { threshold: 300 });
+		await lock.lock();
 		this.esgst.decryptedGiveaways = JSON.parse(getValue('decryptedGiveaways'));
 		for (let code in this.esgst.decryptedGiveaways) {
 			if (this.esgst.decryptedGiveaways.hasOwnProperty(code)) {
@@ -252,7 +254,7 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 		}
 		await lockAndSaveGiveaways(currentGiveaways, firstRun);
 		await setValue('decryptedGiveaways', JSON.stringify(this.esgst.decryptedGiveaways));
-		deleteLock();
+		await lock.unlock();
 		ged.n = ged.giveaways.length;
 		if (ged.n > 0) {
 			if (ged.button) {
@@ -263,12 +265,12 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 	}
 
 	async ged_getGiveaway(code, currentGiveaways, isEnded, source) {
-		let response = await request({ method: 'GET', url: `/giveaway/${code}/` });
+		let response = await FetchRequest.get(`/giveaway/${code}/`);
 		let giveaway = (
 			await this.esgst.modules.giveaways.giveaways_get(
-				DOM.parse(response.responseText),
+				response.html,
 				false,
-				response.finalUrl,
+				response.url,
 				false,
 				null,
 				true
@@ -303,8 +305,8 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 			i += 1;
 			let giveaway = ged.giveaways[ged.i];
 			ged.i += 1;
-			let response = await request({ method: 'GET', url: `/giveaway/${giveaway.code}/` });
-			let builtGiveaway = await buildGiveaway(DOM.parse(response.responseText), response.finalUrl);
+			let response = await FetchRequest.get(`/giveaway/${giveaway.code}/`);
+			let builtGiveaway = await buildGiveaway(response.html, response.url);
 			if (!builtGiveaway || !builtGiveaway.started) {
 				continue;
 			}
@@ -349,7 +351,7 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 	async ged_addIcons(ged, comments) {
 		let currentGiveaways = {};
 		let currentTime = Date.now();
-		let deleteLock = null;
+		let lock = null;
 		let hasEnded = false;
 		let hasNew = false;
 		for (let i = comments.length - 1; i > -1; i--) {
@@ -362,8 +364,9 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 			let links = comment.displayState.querySelectorAll(`[href^="ESGST-"]`);
 			for (let j = links.length - 1; j > -1; j--) {
 				let code = links[j].getAttribute('href').match(/ESGST-(.+)/)[1];
-				if (!deleteLock) {
-					deleteLock = await createLock('gedLock', 300);
+				if (!lock) {
+					lock = new Lock('ged', { threshold: 300 });
+					await lock.lock();
 					this.esgst.decryptedGiveaways = JSON.parse(getValue('decryptedGiveaways'));
 				}
 				code = this.ged_decryptCode(code);
@@ -414,10 +417,10 @@ class GiveawaysGiveawayEncrypterDecrypter extends Module {
 				]);
 			}
 		}
-		if (deleteLock) {
+		if (lock) {
 			await lockAndSaveGiveaways(currentGiveaways);
 			await setValue('decryptedGiveaways', JSON.stringify(this.esgst.decryptedGiveaways));
-			deleteLock();
+			await lock.unlock();
 		}
 		if (ged.button && (hasEnded || hasNew)) {
 			ged.button.nodes.outer.classList.remove('esgst-hidden');

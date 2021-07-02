@@ -1,5 +1,8 @@
 import { setBrowser } from './browser';
+import { RequestQueue } from './class/Queue';
 import { Shared } from './class/Shared';
+
+RequestQueue.init();
 
 let tdsData = [];
 
@@ -39,6 +42,11 @@ const browser = {
 						resolve(JSON.stringify(browserInfo));
 						break;
 					}
+					case 'queue_request': {
+						await RequestQueue.enqueue(obj.key);
+						resolve();
+						break;
+					}
 					case 'do_lock': {
 						const lock = JSON.parse(obj.lock);
 
@@ -75,6 +83,7 @@ const browser = {
 							headers: parameters.headers,
 							method: parameters.method,
 							overrideMimeType: obj.blob ? `text/plain; charset=x-user-defined` : '',
+							timeout: obj.timeout ?? 10000,
 							url: obj.url,
 							onload: async (response) => {
 								if (obj.blob) {
@@ -82,7 +91,13 @@ const browser = {
 										await Shared.common.readZip(response.responseText)
 									)[0].value;
 								}
-								resolve(response);
+								resolve({
+									status: response.status,
+									url: response.finalUrl,
+									redirected:
+										typeof response.finalUrl !== 'undefined' && response.finalUrl !== obj.url,
+									text: response.responseText,
+								});
 							},
 							onerror: (response) => resolve({ error: response.responseText }),
 						});
@@ -93,40 +108,12 @@ const browser = {
 						resolve();
 						break;
 					}
-					case 'get_storage': {
-						const keys = await browser.gm.listValues();
-						const promises = [];
-						const storage = {};
-						for (const key of keys) {
-							const promise = browser.gm.getValue(key);
-							promise.then((value) => (storage[key] = value));
-							promises.push(promise);
-						}
-						await Promise.all(promises);
-						resolve(JSON.stringify(storage));
-						break;
-					}
-					case 'set_values': {
-						const values = JSON.parse(obj.values);
-						const promises = [];
-						for (const key in values) {
-							if (values.hasOwnProperty(key)) {
-								promises.push(browser.gm.setValue(key, values[key]));
-							}
-						}
-						await Promise.all(promises);
-						await browser.gm.setValue('storageChanged', JSON.stringify(Date.now()));
+					case 'register_tab': {
 						resolve();
 						break;
 					}
-					case 'del_values': {
-						const keys = JSON.parse(obj.keys);
-						const promises = [];
-						for (const key of keys) {
-							promises.push(browser.gm.deleteValue(key));
-						}
-						await Promise.all(promises);
-						await browser.gm.setValue('storageChanged', JSON.stringify(Date.now()));
+					case 'update_adareqlim': {
+						await RequestQueue.loadRequestThreshold();
 						resolve();
 						break;
 					}
@@ -218,11 +205,7 @@ browser.gm.addValueChangeListener('storageChanged', async (name, oldValue, newVa
 
 browser.gm.doLock = async (lock) => {
 	let locked = JSON.parse(await browser.gm.getValue(lock.key, '{}'));
-	if (
-		!locked ||
-		!locked.uuid ||
-		locked.timestamp < Date.now() - (lock.threshold + (lock.timeout || 15000))
-	) {
+	if (!locked || !locked.uuid || locked.timestamp < Date.now() - (lock.threshold + lock.timeout)) {
 		await browser.gm.setValue(
 			lock.key,
 			JSON.stringify({
@@ -233,7 +216,7 @@ browser.gm.doLock = async (lock) => {
 		await Shared.common.timeout(lock.threshold / 2);
 		locked = JSON.parse(await browser.gm.getValue(lock.key, '{}'));
 		if (!locked || locked.uuid !== lock.uuid) {
-			if (!lock.lockOrDie) {
+			if (!lock.tryOnce) {
 				return browser.gm.doLock(lock);
 			}
 
@@ -243,7 +226,7 @@ browser.gm.doLock = async (lock) => {
 		return 'true';
 	}
 
-	if (!lock.lockOrDie) {
+	if (!lock.tryOnce) {
 		await Shared.common.timeout(lock.threshold / 3);
 		return browser.gm.doLock(lock);
 	}

@@ -8,7 +8,7 @@ import { browser } from '../browser';
 
 class PersistentStorage {
 	constructor() {
-		this.currentVersion = 12;
+		this.currentVersion = 13;
 
 		this.defaultValues = {
 			decryptedGiveaways: '{}',
@@ -20,7 +20,6 @@ class PersistentStorage {
 			gdtttCache: '{ "giveaways": [], "discussions": [], "tickets": [], "trades": [] }',
 			giveaways: '{}',
 			groups: '[]',
-			notifiedMessages: '{ "lastCheck": 0, "ids": [] }',
 			requestLog: '[]',
 			rerolls: '[]',
 			rfiCache: '{}',
@@ -400,7 +399,6 @@ class PersistentStorage {
 					{ id: 'stbb', side: 'right' },
 					{ id: 'sttb', side: 'right' },
 					{ id: 'usc', side: 'left' },
-					{ id: 'ust', side: 'left' },
 					{ id: 'wbm', side: 'left' },
 					{ id: 'df_s_s', side: 'left' },
 					{ id: 'gf_s_s', side: 'left' },
@@ -813,6 +811,12 @@ class PersistentStorage {
 			}
 
 			toDelete.push('sgDarkGrey', 'sgv2Dark', 'steamGiftiesBlack', 'steamTradiesBlackBlue');
+		}
+
+		if (version < 13) {
+			window.console.log('Upgrading storage to version 13...');
+
+			toDelete.push('settingsAnalytics', 'notifiedMessages');
 		}
 
 		for (const key of Object.keys(toSet)) {

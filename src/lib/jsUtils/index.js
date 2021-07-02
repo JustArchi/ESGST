@@ -45,17 +45,6 @@ class _Utils {
 	}
 
 	/**
-	 * @param {string} c
-	 * @returns {string}
-	 */
-	createUuid(c) {
-		const r = (Math.random() * 16) | 0;
-		const v = c === 'x' ? r : (r & 0x3) | 0x8;
-
-		return v.toString(16);
-	}
-
-	/**
 	 * @param {*} obj
 	 * @param {string | string[]} path
 	 * @returns {object}
@@ -67,6 +56,13 @@ class _Utils {
 
 		return path.reduce((obj, key) => (obj && obj[key] ? obj[key] : null), obj);
 	}
+
+	getPlural = (count, singular, plural) => {
+		if (count === 1) {
+			return singular;
+		}
+		return plural ?? `${singular}s`;
+	};
 
 	getQueryParams = (str = window.location.search) => {
 		return Object.fromEntries(

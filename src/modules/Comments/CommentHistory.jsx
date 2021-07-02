@@ -1,7 +1,9 @@
+import { DOM } from '../../class/DOM';
+import { Lock } from '../../class/Lock';
 import { Module } from '../../class/Module';
 import { Process } from '../../class/Process';
+import { Settings } from '../../class/Settings';
 import { Shared } from '../../class/Shared';
-import { DOM } from '../../class/DOM';
 
 class CommentsCommentHistory extends Module {
 	constructor() {
@@ -73,10 +75,35 @@ class CommentsCommentHistory extends Module {
 		}
 	}
 
-	ch_requestUrl(obj, details, response, responseHtml) {
-		let comment = responseHtml.getElementById(obj.ids[obj.index]);
+	async ch_requestUrl(obj, details, response, responseHtml) {
+		const id = obj.ids[obj.index];
+		let comment = responseHtml.getElementById(id);
 		if (Shared.esgst.sg) {
 			comment = comment.closest('.comment');
+			const username = Settings.get('username');
+			let author = comment.querySelector('.comment__author')?.textContent.trim() ?? '';
+			if (author !== username) {
+				while (author !== username && comment) {
+					comment = comment.previousElementSibling;
+					author = comment?.querySelector('.comment__author')?.textContent.trim() ?? '';
+				}
+				if (!comment) {
+					return;
+				}
+				const newId = comment.querySelector('.comment__summary')?.id ?? '';
+				const key = `${Shared.esgst.name}CommentHistory`;
+				const lock = new Lock(key, { threshold: 300 });
+				await lock.lock();
+				let comments = JSON.parse(Shared.common.getValue(key, '[]'));
+				comments = comments.map((comment) => {
+					if (comment.id === id) {
+						return { ...comment, id: newId };
+					}
+					return comment;
+				});
+				await Shared.common.setValue(key, JSON.stringify(comments));
+				await lock.unlock();
+			}
 			comment.firstElementChild.classList.remove('comment__parent');
 			comment.firstElementChild.classList.add('comment__child');
 		}
@@ -96,14 +123,14 @@ class CommentsCommentHistory extends Module {
 				DOM.insert(
 					comment.getElementsByClassName('action_list')[0].firstElementChild,
 					'afterend',
-					<a href={response.finalUrl}>{responseHtml.title}</a>
+					<a href={response.url}>{responseHtml.title}</a>
 				);
 			}
 			if (Shared.esgst.sg) {
 				fragmentChildren.push(
 					<div className="comments__entity">
 						<p className="comments__entity__name">
-							<a href={response.finalUrl}>{responseHtml.title}</a>
+							<a href={response.url}>{responseHtml.title}</a>
 						</p>
 					</div>
 				);
@@ -118,7 +145,8 @@ class CommentsCommentHistory extends Module {
 	}
 
 	async ch_saveComment(id, timestamp) {
-		let deleteLock = await Shared.common.createLock(`${Shared.esgst.name}CommentHistoryLock`, 300);
+		const lock = new Lock(`${Shared.esgst.name}CommentHistory`, { threshold: 300 });
+		await lock.lock();
 		let key = `${Shared.esgst.name}CommentHistory`;
 		let comments = JSON.parse(Shared.common.getValue(key, '[]'));
 		comments.unshift({
@@ -126,7 +154,7 @@ class CommentsCommentHistory extends Module {
 			timestamp: timestamp,
 		});
 		await Shared.common.setValue(key, JSON.stringify(comments));
-		deleteLock();
+		await lock.unlock();
 	}
 }
 

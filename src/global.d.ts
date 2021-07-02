@@ -1,3 +1,15 @@
+declare interface Window {
+	wrappedJSObject?: {
+		AbortController: typeof AbortController;
+		fetch: typeof window.fetch;
+		fetchOptions: RequestInit;
+	};
+}
+
+declare let XPCNativeWrapper: <T>(value: T) => T;
+
+declare let cloneInto: <T>(value: T, window: Window) => T;
+
 declare namespace JSX {
 	type IntrinsicElements = {
 		[K in keyof HTMLElementTagNameMap]: Omit<
@@ -23,37 +35,6 @@ declare interface ChildNode {
 
 declare interface Text {
 	textContent: string;
-}
-
-interface IUser {
-	nodes: IUserNodes;
-	data: IUserData;
-}
-
-interface IUserNodes {
-	avatarOuter: HTMLAnchorElement | HTMLDivElement;
-	avatarInner: HTMLDivElement;
-	usernameOuter: HTMLDivElement;
-	usernameInner: HTMLAnchorElement;
-	role: HTMLAnchorElement;
-	patreon: HTMLAnchorElement;
-	reputation: HTMLAnchorElement;
-	positiveReputation: HTMLSpanElement;
-	negativeReputation: HTMLSpanElement;
-}
-
-interface IUserData {
-	id: string;
-	steamId: string;
-	avatar: string;
-	username: string;
-	url: string;
-	isOp: boolean;
-	roleId: string;
-	roleName: string;
-	isPatron: boolean;
-	positiveReputation: number;
-	negativeReputation: number;
 }
 
 interface ICommentEntity {
@@ -83,7 +64,7 @@ interface ICommentEntityData {
 interface IComment {
 	nodes: ICommentNodes;
 	data: ICommentData;
-	author: IUser;
+	author: import('./models/User').User;
 	attachedImages: IAttachedImage[];
 	generation: number;
 	parent: IComment;
@@ -194,7 +175,7 @@ interface IAttachedImageData {
 interface ICommentBox {
 	nodes: ICommentBoxNodes;
 	data: ICommentBoxData;
-	author: IUser;
+	author: import('./models/User').User;
 	parent: IComment;
 
 	parse(outer: HTMLDivElement): void;

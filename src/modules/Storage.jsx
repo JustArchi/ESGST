@@ -558,10 +558,6 @@ function loadDataManagement(type, isPopup, callback) {
 					key: 'tickets_gdttt',
 					name: 'Giveaway/Discussion/Ticket/Trade Tracker',
 				},
-				{
-					key: 'tickets_ust',
-					name: 'User Suspension Tracker',
-				},
 			],
 		},
 		{
@@ -1444,10 +1440,6 @@ function loadDataCleaner(isPopup) {
 								key: 'tickets_gdttt',
 								name: 'Giveaway/Discussion/Ticket/Trade Tracker',
 							},
-							{
-								key: 'tickets_ust',
-								name: 'User Suspension Tracker',
-							},
 						],
 					},
 					{
@@ -1693,16 +1685,7 @@ async function manageData(dm, storageType, space, callback) {
 			for (const key of stringified) {
 				dm.data[key] = JSON.parse(dm.data[key]);
 			}
-
-			let notifiedMessages = JSON.parse(
-				Shared.common.getValue('notifiedMessages', '{ "lastCheck": 0, "ids": [] }')
-			);
-			notifiedMessages.ids = Array.from(
-				new Set([...notifiedMessages.ids, ...(dm.data.notifiedMessages.ids || [])])
-			);
-			await Shared.common.setValue('notifiedMessages', JSON.stringify(notifiedMessages));
 		} else if (dm.type === 'export') {
-			data.notifiedMessages = Shared.common.getValue('notifiedMessages');
 			data.v = Shared.common.getValue('v');
 		}
 	}
@@ -1801,7 +1784,6 @@ async function manageData(dm, storageType, space, callback) {
 						main: ['lastUsed'],
 						ct: ['count', 'readComments'],
 						gdttt: ['visited'],
-						ust: ['sent'],
 					};
 				}
 			case 'trades':
@@ -1830,7 +1812,6 @@ async function manageData(dm, storageType, space, callback) {
 					main: 0,
 					pm: 0,
 					total: 0,
-					ust: 0,
 				};
 				mainFound = false;
 				for (let mergedDataKey in mergedData) {

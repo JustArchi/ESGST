@@ -1,12 +1,12 @@
-import { Module } from '../../class/Module';
-import { common } from '../Common';
-import { permissions } from '../../class/Permissions';
 import { DOM } from '../../class/DOM';
+import { FetchRequest } from '../../class/FetchRequest';
+import { Lock } from '../../class/Lock';
+import { Module } from '../../class/Module';
+import { permissions } from '../../class/Permissions';
+import { common } from '../Common';
 
 const createElements = common.createElements.bind(common),
-	createLock = common.createLock.bind(common),
 	getValue = common.getValue.bind(common),
-	request = common.request.bind(common),
 	setValue = common.setValue.bind(common);
 class GiveawaysIsThereAnyDealInfo extends Module {
 	constructor() {
@@ -103,13 +103,10 @@ class GiveawaysIsThereAnyDealInfo extends Module {
 			lastCheck: Date.now(),
 			version: 2,
 		};
-		const response = await request({
-			method: 'GET',
+		const response = await FetchRequest.get(`https://isthereanydeal.com/game/${plain}/info/`, {
 			queue: true,
-			url: `https://isthereanydeal.com/game/${plain}/info/`,
 		});
-		const html = DOM.parse(response.responseText);
-		const deals = html.querySelectorAll('#gh-po tr');
+		const deals = response.html.querySelectorAll('#gh-po tr');
 		for (const deal of deals) {
 			const match = deal.firstElementChild.textContent
 				.trim()
@@ -124,7 +121,7 @@ class GiveawaysIsThereAnyDealInfo extends Module {
 				source: deal.querySelector('.gh-po__shopTitle').textContent.trim(),
 			};
 		}
-		const bundles = html.querySelectorAll(`.bundleTable tr:not(:first-child)`);
+		const bundles = response.html.querySelectorAll(`.bundleTable tr:not(:first-child)`);
 		for (const bundle of bundles) {
 			const link = bundle.querySelector('.t-st3--link');
 			itadi.bundles.push({
@@ -135,14 +132,15 @@ class GiveawaysIsThereAnyDealInfo extends Module {
 				source: bundle.querySelector('.shopTitle').textContent.trim(),
 			});
 		}
-		const deleteLock = await createLock('gameLock', 300);
+		const lock = new Lock('game', { threshold: 300 });
+		await lock.lock();
 		const games = JSON.parse(getValue('games'));
 		if (!games[giveaway.type][giveaway.id]) {
 			games[giveaway.type][giveaway.id] = {};
 		}
 		games[giveaway.type][giveaway.id].itadi = itadi;
 		await setValue('games', JSON.stringify(games));
-		deleteLock();
+		await lock.unlock();
 		return itadi;
 	}
 

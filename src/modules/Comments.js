@@ -1,8 +1,9 @@
 import { Module } from '../class/Module';
-import { common } from './Common';
-import { Shared } from '../class/Shared';
+import { Scope } from '../class/Scope';
 import { Settings } from '../class/Settings';
+import { Shared } from '../class/Shared';
 import { Comment } from '../models/Comment';
+import { common } from './Common';
 
 const getUser = common.getUser.bind(common),
 	getValue = common.getValue.bind(common);
@@ -20,16 +21,16 @@ class Comments extends Module {
 
 	async comments_load(context, main, source, endless, mainEndless) {
 		const commentsV2 = Comment.parseAll(context);
-		this.esgst.currentScope.commentsV2.push(...commentsV2);
+		Scope.addData('current', 'commentsV2', commentsV2, endless);
 		for (const feature of Shared.esgst.commentV2Features) {
 			await feature(commentsV2, main);
 		}
 		let count, comments, i, n;
 		comments = await this.comments_get(context, document, main, endless);
 		if (!comments.length) return;
+		Scope.addData('current', 'comments', comments, endless);
 		for (i = 0, n = comments.length; i < n; ++i) {
 			comments[i].index = i;
-			this.esgst.currentScope.comments.push(comments[i]);
 		}
 		for (const feature of Shared.esgst.commentFeatures) {
 			await feature(comments, main);
@@ -114,7 +115,7 @@ class Comments extends Module {
 		for (i = matches.length - 1; i >= 0; --i) {
 			comment = await this.comments_getInfo(
 				matches[i],
-				Shared.esgst.currentScope.sourceLink || sourceLink,
+				Scope.current?.sourceLink || sourceLink,
 				endless ? this.esgst.users : JSON.parse(getValue('users')),
 				main
 			);
@@ -130,13 +131,15 @@ class Comments extends Module {
 		const comment = {};
 		comment.comment = context;
 		comment.outerWrap = comment.comment;
+		comment.parent = comment.comment.parentElement;
 		const author = comment.comment.querySelector(`.comment__author, .author_name`);
 		if (!author) {
 			return;
 		}
 		comment.author = author.textContent.trim();
-		comment.summary = comment.comment.querySelector('.comment__summary', '.comment_inner');
-		comment.isOp = !comment.summary.id;
+		comment.summary = comment.comment.querySelector('.comment__summary, .comment_body');
+		comment.isOp =
+			(comment.summary && !comment.summary.id) || (comment.parent && !comment.parent.id);
 		comment.displayState = comment.comment.querySelector(
 			`.comment__display-state, .comment_body_default`
 		);
