@@ -1,6 +1,6 @@
 /* @preserve
 // ==UserScript==
-// @name Enhanced SteamGifts & SteamTrades (ESGST)
+// @name Enhanced SteamGifts & SteamTrades fork by JustArchi (A-ESGST)
 // @namespace https://rafaelgomesxyz.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
