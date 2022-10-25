@@ -429,7 +429,7 @@ async function sync(syncer) {
 		(syncer.parameters && syncer.parameters.HiddenGames) ||
 		(!syncer.parameters && Settings.get('syncHiddenGames'))
 	) {
-		if (now - Settings.get('lastSyncHiddenGames') > 2592000000) {
+		if (now - Settings.get('lastSyncHiddenGames') > 0) {
 			if (Settings.get('lastPageHiddenGames') === 0) {
 				const doContinue = await Shared.common.createConfirmationAsync(
 					`WARNING: You are going to sync your hidden games. This is a process that may take a very long time, depending on how many games you have on your list, as the requests will be limited to 1 per second to avoid making a lot of requests to SteamGifts in a short period of time. Also keep in mind that this is a cumulative sync, which means that if you cancel the sync and sync again later, it will pick up from where it left off.${
@@ -454,8 +454,8 @@ async function sync(syncer) {
 		(!syncer.parameters && (Settings.get('syncWhitelist') || Settings.get('syncBlacklist')))
 	) {
 		if (
-			now - Settings.get('lastSyncWhitelist') > 2592000000 &&
-			now - Settings.get('lastSyncBlacklist') > 2592000000
+			now - Settings.get('lastSyncWhitelist') > 0 &&
+			now - Settings.get('lastSyncBlacklist') > 0
 		) {
 			if (Settings.get('lastPageWhitelist') === 0 || Settings.get('lastPageBlacklist') === 0) {
 				const doContinue = await Shared.common.createConfirmationAsync(
@@ -645,11 +645,11 @@ async function sync(syncer) {
 	if (
 		(((syncer.parameters && syncer.parameters.Whitelist) ||
 			(!syncer.parameters && Settings.get('syncWhitelist'))) &&
-			(now - Settings.get('lastSyncWhitelist') > 2592000000 ||
+			(now - Settings.get('lastSyncWhitelist') > 0 ||
 				Settings.get('lastPageWhitelist') > 0)) ||
 		(((syncer.parameters && syncer.parameters.Blacklist) ||
 			(!syncer.parameters && Settings.get('syncBlacklist'))) &&
-			(now - Settings.get('lastSyncBlacklist') > 2592000000 ||
+			(now - Settings.get('lastSyncBlacklist') > 0 ||
 				Settings.get('lastPageBlacklist') > 0))
 	) {
 		if (
@@ -755,7 +755,7 @@ async function sync(syncer) {
 	if (
 		((syncer.parameters && syncer.parameters.HiddenGames) ||
 			(!syncer.parameters && Settings.get('syncHiddenGames'))) &&
-		(now - Settings.get('lastSyncHiddenGames') > 2592000000 ||
+		(now - Settings.get('lastSyncHiddenGames') > 0 ||
 			Settings.get('lastPageHiddenGames') > 0)
 	) {
 		syncer.progressBar.setMessage('Syncing your hidden games...');
