@@ -22067,7 +22067,7 @@ class Header_StHeader extends IHeader {
 
 
   addButtonContainer(params) {
-    const [context, position] = params.context ? [params.context, params.position] : [this.nodes.logo, 'afterend'];
+    const [context, position] = params.context ? [params.context, params.position] : [this.nodes.rightNav, 'afterbegin'];
     let buttonContainerNode = null;
 
     if (params.isDropdown) {
@@ -22183,8 +22183,8 @@ class Header_StHeader extends IHeader {
     this.nodes.outer = outerNode;
     this.nodes.inner = this.nodes.outer.querySelector('.header_inner_wrap');
     this.nodes.nav = this.nodes.inner.querySelector('nav');
-    this.nodes.leftNav = this.nodes.nav;
-    this.nodes.rightNav = this.nodes.nav;
+    this.nodes.leftNav = this.nodes.nav.querySelector('.nav_btns');
+    this.nodes.rightNav = this.nodes.leftNav;
     this.nodes.logo = this.nodes.nav.querySelector('.nav_logo');
     const buttonContainerNodes = Array.from(this.nodes.nav.querySelectorAll('.nav_btn_container, .nav_avatar'));
 
@@ -23030,10 +23030,12 @@ class CustomHeaderFooterLinks_GeneralCustomHeaderFooterLinks extends Module {
               compactSwitch.enable();
             }
           } else {
+            var _editItem$data$icon$m, _editItem$data$icon$m2;
+
             description.value = editItem.data.description || '';
             name.value = editItem.data.name;
-            icon.value = editItem.data.icon ? editItem.data.icon.match(/.+(fa-[a-z-]+)$/)[1] : '';
-            color.value = editItem.data.icon ? editItem.data.icon.match(/icon-(.+?)\s/)[1] : '';
+            icon.value = editItem.data.icon ? (_editItem$data$icon$m = editItem.data.icon.match(/.+(fa-[a-z-]+)$/)) === null || _editItem$data$icon$m === void 0 ? void 0 : _editItem$data$icon$m[1] : '';
+            color.value = editItem.data.icon ? (_editItem$data$icon$m2 = editItem.data.icon.match(/icon-(.+?)\s/)) === null || _editItem$data$icon$m2 === void 0 ? void 0 : _editItem$data$icon$m2[1] : '';
             url.value = editItem.data.url;
           }
 
@@ -23245,7 +23247,7 @@ const generalCustomHeaderFooterLinks = new CustomHeaderFooterLinks_GeneralCustom
 
 class PersistentStorage_PersistentStorage {
   constructor() {
-    this.currentVersion = 13;
+    this.currentVersion = 14;
     this.defaultValues = {
       decryptedGiveaways: '{}',
       delistedGames: '{ "banned": [], "removed": [] }',
@@ -23976,6 +23978,22 @@ class PersistentStorage_PersistentStorage {
     if (version < 13) {
       window.console.log('Upgrading storage to version 13...');
       toDelete.push('settingsAnalytics', 'notifiedMessages');
+    }
+
+    if (version < 14) {
+      window.console.log('Upgrading storage to version 14...');
+      let settingsChanged = false;
+      const settings = JSON.parse(storage.settings);
+
+      if (Utils.isSet(settings.chfl_footer_st)) {
+        settings.chfl_footer_st.push('steamtrades', 'steamgifts');
+        settingsChanged = true;
+      }
+
+      if (settingsChanged) {
+        toSet.settings = JSON.stringify(settings);
+        storage.settings = toSet.settings;
+      }
     }
 
     for (const key of Object.keys(toSet)) {
@@ -38798,7 +38816,7 @@ class GiveawaysSorter_GiveawaysGiveawaysSorter extends Module {
   }
 
   init(popup) {
-    if (!popup && !this.esgst.giveawaysPath && !this.esgst.enteredPath && !this.esgst.groupPath && !this.esgst.userPath) return;
+    if (!popup && !this.esgst.giveawaysPath && !this.esgst.enteredPath && !this.esgst.gamePath && !this.esgst.groupPath && !this.esgst.userPath) return;
     const typeMatch = window.location.search.match(/type=(wishlist|recommended|group|new)/);
     let type = '';
 
@@ -38808,6 +38826,8 @@ class GiveawaysSorter_GiveawaysGiveawaysSorter extends Module {
       type = 'Entered';
     } else if (this.esgst.userPath) {
       type = 'User';
+    } else if (this.esgst.gamePath) {
+      type = 'Games';
     } else if (this.esgst.groupPath) {
       type = 'Groups';
     } else if (popup) {
@@ -45478,7 +45498,8 @@ class GiveawayEncrypterDecrypter_GiveawaysGiveawayEncrypterDecrypter extends Mod
 
 const giveawaysGiveawayEncrypterDecrypter = new GiveawayEncrypterDecrypter_GiveawaysGiveawayEncrypterDecrypter();
 
-// CONCATENATED MODULE: ./src/modules/Giveaways/GiveawayErrorSearchLinks.jsx
+// CONCATENATED MODULE: ./src/modules/Giveaways/GiveawayErrorSearchLinks.tsx
+
 
 
 
@@ -45487,8 +45508,62 @@ const GiveawayErrorSearchLinks_getFeatureTooltip = Common_common.getFeatureToolt
 class GiveawayErrorSearchLinks_GiveawaysGiveawayErrorSearchLinks extends Module {
   constructor() {
     super();
+
+    defineProperty_default()(this, "init", () => {
+      const table = document.getElementsByClassName('table--summary')[0];
+      if (!this.esgst.giveawayPath || !table) return;
+      const name = encodeURIComponent(table.getElementsByClassName('table__column__secondary-link')[0].textContent);
+      DOM.insert(table.getElementsByClassName('table__row-outer-wrap')[0], 'afterend', DOM.element("div", {
+        className: "table__row-outer-wrap",
+        title: GiveawayErrorSearchLinks_getFeatureTooltip('gesl')
+      }, DOM.element("div", {
+        className: "table__row-inner-wrap"
+      }, DOM.element("div", {
+        className: "table__column--width-small"
+      }, DOM.element("span", {
+        className: "esgst-bold"
+      }, "Search Links")), DOM.element("div", {
+        className: "table__column--width-fill esgst-gesl"
+      }, DOM.element("a", {
+        href: "https://www.steamgifts.com/giveaways/search?q=".concat(name),
+        target: "_blank",
+        rel: "noreferrer",
+        title: "Search for active giveaways"
+      }, DOM.element("i", {
+        className: "fa"
+      }, DOM.element("img", {
+        src: this.esgst.sgIcon
+      }))), DOM.element("a", {
+        href: "http://store.steampowered.com/search/?term=".concat(name),
+        target: "_blank",
+        rel: "noreferrer",
+        title: "Search on Steam"
+      }, DOM.element("i", {
+        className: "fa fa-steam"
+      })), DOM.element("a", {
+        href: "https://steamdb.info/search/?a=app&q=".concat(name),
+        target: "_blank",
+        rel: "noreferrer",
+        title: "Search on SteamDB"
+      }, DOM.element("i", {
+        className: "fa"
+      }, DOM.element("img", {
+        src: "https://steamdb.info/static/logos/16px.png"
+      }))), DOM.element("a", {
+        href: "https://barter.vg/search?q=".concat(name),
+        target: "_blank",
+        rel: "noreferrer",
+        title: "Search on Barter.vg"
+      }, DOM.element("i", {
+        className: "fa"
+      }, DOM.element("img", {
+        src: "https://bartervg.com/imgs/ico/barter/favicon-16x16.png"
+      })))))));
+    });
+
     this.info = {
       // by Revadike
+      // eslint-disable-next-line react/display-name
       description: () => DOM.element("ul", null, DOM.element("li", null, "If you cannot access a giveaway because of many different reasons, a \"Search Links\" row is added to the table of the", ' ', DOM.element("a", {
         href: "https://www.steamgifts.com/giveaway/FN2PK/"
       }, "error"), " page containing 4 links that allow you to search for the game elsewhere:"), DOM.element("ul", null, DOM.element("li", null, "A SteamGifts icon that allows you to search for open giveaways of the game on SteamGifts."), DOM.element("li", null, DOM.element("i", {
@@ -45496,7 +45571,7 @@ class GiveawayErrorSearchLinks_GiveawaysGiveawayErrorSearchLinks extends Module 
       }), " allows you to search for the game on Steam."), DOM.element("li", null, DOM.element("i", {
         className: "fa"
       }, DOM.element("img", {
-        src: "https://steamdb.info/static/logos/favicon-16x16.png"
+        src: "https://steamdb.info/static/logos/16px.png"
       })), ' ', "allows you to search for the game on SteamDB."), DOM.element("li", null, DOM.element("i", {
         className: "fa"
       }, DOM.element("img", {
@@ -45507,54 +45582,6 @@ class GiveawayErrorSearchLinks_GiveawaysGiveawayErrorSearchLinks extends Module 
       sg: true,
       type: 'giveaways'
     };
-  }
-
-  init() {
-    const table = document.getElementsByClassName('table--summary')[0];
-    if (!this.esgst.giveawayPath || !table) return;
-    let name = encodeURIComponent(table.getElementsByClassName('table__column__secondary-link')[0].textContent);
-    DOM.insert(table.getElementsByClassName('table__row-outer-wrap')[0], 'afterend', DOM.element("div", {
-      className: "table__row-outer-wrap",
-      title: GiveawayErrorSearchLinks_getFeatureTooltip('gesl')
-    }, DOM.element("div", {
-      className: "table__row-inner-wrap"
-    }, DOM.element("div", {
-      className: "table__column--width-small"
-    }, DOM.element("span", {
-      className: "esgst-bold"
-    }, "Search Links")), DOM.element("div", {
-      className: "table__column--width-fill esgst-gesl"
-    }, DOM.element("a", {
-      href: "https://www.steamgifts.com/giveaways/search?q=".concat(name),
-      target: "_blank",
-      title: "Search for active giveaways"
-    }, DOM.element("i", {
-      className: "fa"
-    }, DOM.element("img", {
-      src: this.esgst.sgIcon
-    }))), DOM.element("a", {
-      href: "http://store.steampowered.com/search/?term=".concat(name),
-      target: "_blank",
-      title: "Search on Steam"
-    }, DOM.element("i", {
-      className: "fa fa-steam"
-    })), DOM.element("a", {
-      href: "https://steamdb.info/search/?a=app&q=".concat(name),
-      target: "_blank",
-      title: "Search on SteamDB"
-    }, DOM.element("i", {
-      className: "fa"
-    }, DOM.element("img", {
-      src: "https://steamdb.info/static/logos/favicon-16x16.png"
-    }))), DOM.element("a", {
-      href: "https://barter.vg/search?q=".concat(name),
-      target: "_blank",
-      title: "Search on Barter.vg"
-    }, DOM.element("i", {
-      className: "fa"
-    }, DOM.element("img", {
-      src: "https://bartervg.com/imgs/ico/barter/favicon-16x16.png"
-    })))))));
   }
 
 }
@@ -45646,7 +45673,7 @@ class Filters_Filters extends Module {
       key: "".concat(this.id, "_presets"),
       popup: popup,
       rules: null,
-      type: popup || (this.esgst.groupPath ? 'Groups' : window.location.search.match(/type/) ? {
+      type: popup || (this.esgst.gamePath ? 'Games' : this.esgst.groupPath ? 'Groups' : window.location.search.match(/type/) ? {
         wishlist: 'Wishlist',
         recommended: 'Recommended',
         group: 'Group',
@@ -47460,7 +47487,7 @@ class Filters_Filters extends Module {
       obj.presetDisplay.textContent = obj.presetInput.value = newName;
     }
 
-    const types = ['', 'Wishlist', 'Recommended', 'Group', 'New', 'Created', 'Entered', 'Won', 'Groups', 'User', 'Gb', 'Ge', 'Ged'];
+    const types = ['', 'Wishlist', 'Recommended', 'Group', 'New', 'Created', 'Entered', 'Won', 'Games', 'Groups', 'User', 'Gb', 'Ge', 'Ged'];
 
     for (const type of types) {
       if (Settings.get("".concat(obj.id, "_preset").concat(type)) === oldName) {
@@ -47748,7 +47775,7 @@ class Filters_Filters extends Module {
         if ((key !== 'fullCV' || (rules.value || item.reducedCV || item.noCV) && (!rules.value || !item.reducedCV && !item.noCV)) && (key === 'fullCV' || (!rules.value || item[key]) && (rules.value || !item[key]))) break;
         filtered = false;
 
-        if (!notMain && !item.deleted && key === 'ended' && !rules.value && (this.esgst.createdPath || this.esgst.enteredPath || this.esgst.wonPath || this.esgst.userPath || this.esgst.groupPath)) {
+        if (!notMain && !item.deleted && key === 'ended' && !rules.value && (this.esgst.createdPath || this.esgst.enteredPath || this.esgst.wonPath || this.esgst.userPath || this.esgst.gamePath || this.esgst.groupPath)) {
           this.esgst.stopEs = true;
         }
 
@@ -49572,7 +49599,7 @@ class GiveawayFilters_GiveawaysGiveawayFilters extends Filters_Filters {
       this.esgst.giveawayFeatures.push(this.gf_getGiveaways.bind(this));
     }
 
-    if (Settings.get('gf_m') && (this.esgst.giveawaysPath || this.esgst.createdPath || this.esgst.enteredPath || this.esgst.wonPath || this.esgst.groupPath || this.esgst.userPath)) {
+    if (Settings.get('gf_m') && (this.esgst.giveawaysPath || this.esgst.createdPath || this.esgst.enteredPath || this.esgst.wonPath || this.esgst.gamePath || this.esgst.groupPath || this.esgst.userPath)) {
       if (!Shared.esgst.hasAddedFilterContainer) {
         Shared.esgst.style.insertAdjacentText('beforeend', "\n\t\t\t\t\t.esgst-gf-container {\n\t\t\t\t\t\tposition: ".concat(Settings.get('gf_m_f') ? 'sticky' : 'static', ";\n\t\t\t\t\t\ttop: ").concat(Shared.esgst.commentsTop, "px;\n\t\t\t\t\t}\n\t\t\t\t"));
       }
@@ -49628,7 +49655,7 @@ class GiveawayFilters_GiveawaysGiveawayFilters extends Filters_Filters {
           }
         }
 
-        if (source !== 'gc' && (this.esgst.giveawaysPath || this.esgst.groupPath) || this.esgst.giveawayPath) {
+        if (source !== 'gc' && (this.esgst.giveawaysPath || this.esgst.gamePath || this.esgst.groupPath) || this.esgst.giveawayPath) {
           if (!giveaway.innerWrap.getElementsByClassName('esgst-gf-hide-button')[0] && (!this.esgst.giveaways[giveaway.code] || !this.esgst.giveaways[giveaway.code].hidden || !this.esgst.giveaways[giveaway.code].code)) {
             new class_Button_Button(giveaway.headingName, 'beforebegin', {
               callbacks: [this.gf_hideGiveaway.bind(this, giveaway, main), null, this.gf_unhideGiveaway.bind(this, giveaway, main), null],
@@ -72792,6 +72819,8 @@ class Giveaways_Giveaways extends Module {
 
     if (!hr && main && (this.esgst.createdPath || this.esgst.enteredPath || this.esgst.wonPath || this.esgst.archivePath)) {
       query = Shared.common.getSelectors(endless, ['X.giveaway__row-outer-wrap', 'X.featured__outer-wrap--giveaway', ".table:not(.table--summary) X.table__row-outer-wrap"]);
+    } else if (this.esgst.gamePath) {
+      query = Shared.common.getSelectors(endless, ['X.giveaway__row-outer-wrap']);
     } else {
       query = Shared.common.getSelectors(endless, ['X.giveaway__row-outer-wrap', 'X.featured__outer-wrap--giveaway']);
     }
@@ -72860,6 +72889,7 @@ class Giveaways_Giveaways extends Module {
     const wishlistPath = Common_common.testPath('Community Wishlist', 'sg', mainUrl || window.location.pathname);
     const archivePath = Common_common.testPath('Archive', 'sg', mainUrl || window.location.pathname);
     const giveawaysPath = Common_common.testPath('Giveaways', 'sg', mainUrl || window.location.pathname);
+    const gamePath = Common_common.testPath('Game', 'sg', mainUrl || window.location.pathname);
     const groupPath = Common_common.testPath('Group', 'sg', mainUrl || window.location.pathname);
     const userPath = Common_common.testPath('User - Giveaways - Sent', 'sg', mainUrl || window.location.pathname);
     const userWonPath = Common_common.testPath('User - Giveaways - Won', 'sg', mainUrl || window.location.pathname);
@@ -73048,7 +73078,7 @@ class Giveaways_Giveaways extends Module {
     if (Settings.get('gf') && Settings.get('gf_s') && main) {
       let savedGiveaway = this.esgst.giveaways[giveaway.code];
 
-      if ((giveawaysPath || groupPath) && savedGiveaway && savedGiveaway.hidden && savedGiveaway.code && savedGiveaway.endTime && savedGiveaway.endTime > Date.now()) {
+      if ((giveawaysPath || gamePath || groupPath) && savedGiveaway && savedGiveaway.hidden && savedGiveaway.code && savedGiveaway.endTime && savedGiveaway.endTime > Date.now()) {
         giveaway.outerWrap.classList.add('esgst-hidden');
         giveaway.outerWrap.setAttribute('data-esgst-not-filterable', 'gf');
 
@@ -82697,6 +82727,27 @@ class Esgst_Esgst {
         name: 'Giveaway - Region Restrictions',
         pattern: "^/giveaway/.{5}/[A-Za-z0-9-]+/region-restrictions"
       }, {
+        name: 'Game',
+        pattern: '^/game/'
+      }, {
+        name: 'Game - Giveaways',
+        pattern: "^/game/.+?/[^/]+($|/search)"
+      }, {
+        name: 'Game - Coming Soon',
+        pattern: "^/game/.+?/[^/]+/coming-soon"
+      }, {
+        name: 'Game - Open',
+        pattern: "^/game/.+?/[^/]+/open"
+      }, {
+        name: 'Game - Closed',
+        pattern: "^/game/.+?/[^/]+/closed"
+      }, {
+        name: 'Game - Deleted',
+        pattern: "^/game/.+?/[^/]+/deleted"
+      }, {
+        name: 'Game - Stats',
+        pattern: "^/game/.+?/[^/]+/stats"
+      }, {
         name: 'Group',
         pattern: '^/group/'
       }, {
@@ -83074,6 +83125,7 @@ class Esgst_Esgst {
     this.elgbCache = {};
     this.originalHash = window.location.hash;
     this.userPath = false;
+    this.gamePath = false;
     this.groupPath = false;
     this.regionsPath = false;
     this.groupWishlistPath = false;
@@ -83239,6 +83291,7 @@ class Esgst_Esgst {
     this.elgbCache = JSON.parse(LocalStorage.get('elgbCache', "{\"descriptions\": {}, \"timestamp\": ".concat(Date.now(), "}")));
     this.userPath = window.location.pathname.match(/^\/user\//);
     this.userWonPath = this.userPath && window.location.pathname.match(/\/giveaways\/won/);
+    this.gamePath = window.location.pathname.match(/^\/game\//);
     this.groupPath = window.location.pathname.match(/^\/group\//);
     this.regionsPath = window.location.pathname.match(/^\/regions\//);
     this.groupWishlistPath = window.location.pathname.match(/^\/group\/(.*?)\/wishlist/);
@@ -83426,7 +83479,7 @@ class Footer_StFooter extends IFooter {
   addLinkContainer(params) {
     const [context, position] = params.context ? [params.context, params.position] : params.side === 'left' ? [this.nodes.leftNav, params.position || 'beforeend'] : [this.nodes.rightNav, params.position || 'afterbegin'];
     let linkContainerNode;
-    DOM.insert(context, position, DOM.element("li", {
+    DOM.insert(context, position, DOM.element("div", {
       ref: _ref2 => linkContainerNode = _ref2
     }, params.icon ? DOM.element("i", {
       className: params.icon
@@ -83452,14 +83505,15 @@ class Footer_StFooter extends IFooter {
     }
 
     this.nodes.outer = outerNode;
-    this.nodes.inner = this.nodes.outer.querySelector('.footer_inner_wrap');
+    this.nodes.inner = this.nodes.outer.querySelector('.footer_lower .footer_inner_wrap');
     this.nodes.nav = this.nodes.inner;
-    DOM.insert(this.nodes.nav, 'afterbegin', DOM.element("ul", {
-      ref: _ref3 => this.nodes.leftNav = _ref3
+    DOM.insert(this.nodes.nav, 'afterbegin', DOM.element("div", {
+      ref: _ref3 => this.nodes.leftNav = _ref3,
+      style: "display: flex; gap: 15px;"
     }));
-    this.nodes.leftNav.appendChild(this.nodes.nav.querySelector(':scope > div'));
-    this.nodes.rightNav = this.nodes.nav.querySelector(':scope > ul:last-child');
-    const linkContainerNodes = [...Array.from(this.nodes.leftNav.querySelectorAll(':scope > li, :scope > div')), ...Array.from(this.nodes.rightNav.querySelectorAll(':scope > li, :scope > div'))];
+    this.nodes.leftNav.appendChild(this.nodes.nav.querySelector('.footer_steam'));
+    this.nodes.rightNav = this.nodes.nav.querySelector('.footer_sites');
+    const linkContainerNodes = [...Array.from(this.nodes.leftNav.querySelectorAll(':scope > a')), ...Array.from(this.nodes.rightNav.querySelectorAll(':scope > a'))];
 
     for (const linkContainerNode of linkContainerNodes) {
       this.parseLinkContainer(linkContainerNode);
@@ -83491,10 +83545,10 @@ class Footer_StFooter extends IFooter {
       linkContainer.data.icon = linkContainer.nodes.icon.className;
     }
 
-    const linkNode = linkContainer.nodes.outer.querySelector('a');
+    const linkNode = linkContainer.nodes.outer;
 
     if (linkNode) {
-      linkContainer.nodes.link = linkContainer.nodes.outer.querySelector('a');
+      linkContainer.nodes.link = linkContainer.nodes.outer;
       linkContainer.data.name = linkContainer.nodes.link.textContent.trim() || linkContainer.nodes.outer.title;
       linkContainer.data.url = linkContainer.nodes.link.getAttribute('href');
     } else {
