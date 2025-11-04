@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import { browser } from '../browser';
 
 type LockData = {
@@ -18,7 +17,7 @@ export class Lock {
 
 	constructor(key: string, data: Partial<LockOptions> = {}) {
 		this.data = {
-			uuid: uuidv4(),
+			uuid: crypto.randomUUID(),
 			key: `${key}Lock`,
 			threshold: 100,
 			timeout: 15000,

@@ -1,6 +1,3 @@
-import 'jQuery-QueryBuilder/dist/js/query-builder.standalone.min';
-import 'jquery-ui/ui/widgets/progressbar';
-import 'jquery-ui/ui/widgets/slider';
 import '../browser-gm';
 import '../main';
 

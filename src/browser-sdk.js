@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import { setBrowser } from './browser';
 
 const browser = {
@@ -24,7 +23,7 @@ const browser = {
 		},
 		sendMessage: (obj) => {
 			return new Promise((resolve) => {
-				obj.uuid = uuidv4();
+				obj.uuid = crypto.randomUUID();
 				// @ts-ignore
 				self.port.emit(obj.action, obj);
 				// @ts-ignore
