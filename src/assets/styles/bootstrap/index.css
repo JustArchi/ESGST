@@ -885,7 +885,7 @@ textarea.form-control {
 .checkbox,
 .radio {
 	position: relative;
-	display: block;
+	display: inline;
 	margin-top: 10px;
 	margin-bottom: 10px;
 }
