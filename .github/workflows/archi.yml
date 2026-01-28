@@ -1,0 +1,86 @@
+name: Archi-Auto-Update
+
+on:
+  schedule:
+  - cron: '0 2 * * *'
+
+  workflow_dispatch:
+
+env:
+  GITHUB_UPSTREAM_BRANCH: 'main'
+  GITHUB_UPSTREAM_REPO: 'https://github.com/SquishedPotatoe/esgst'
+  NODE_JS_VERSION: 'lts/*'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 1000
+        show-progress: false
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Setup Node.js with npm
+      uses: actions/setup-node@v6
+      with:
+        check-latest: true
+        node-version: ${{ env.NODE_JS_VERSION }}
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: latest
+
+    - name: Verify Node.js
+      run: node -v
+
+    - name: Verify npm
+      run: npm -v
+
+    - name: Verify pnpm
+      run: pnpm -v
+
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: sh
+      run: |
+        echo "STORE_PATH=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v5
+      name: Setup pnpm cache
+      with:
+        path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+
+    - name: Run automatic deployment
+      shell: sh
+      run: |
+        set -eu
+
+        git config --local pull.rebase false
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+
+        git pull ${{ env.GITHUB_UPSTREAM_REPO }} ${{ env.GITHUB_UPSTREAM_BRANCH }}
+
+        pnpm i
+        pnpm run build-userscripts
+
+        mkdir -p "hosted"
+
+        cp "dist/userscript.dev.user.js" "hosted/ESGST.dev.user.js"
+        cp "dist/userscript.user.js" "hosted/ESGST.user.js"
+        cp "dist/userscript.meta.js" "hosted/ESGST.meta.js"
+
+        git add -A "hosted"
+
+        if ! git diff --quiet --cached; then
+            git commit -m "Automatic A-ESGST build | $(date -u)"
+
+            git push
+        fi

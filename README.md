@@ -1,3 +1,31 @@
+# Enhanced SteamGifts & SteamTrades fork by JustArchi (A-ESGST)
+
+A-ESGST is provided in form of userscript only.
+
+## Installation
+
+Navigate **[here](https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.user.js)** and install as userscript when prompted. You'll need userscript manager such as Tampermonkey, refer to original ESGST for further info.
+
+## Changes compared to SquishedPotatoe's fork
+
+- None!
+
+## Changes compared to original ESGST
+
+- 2.11.3 Filter descriptions allows regex without limitations. You can use `.*` to filter all descriptions, therefore not displaying the description when using enter button.
+- Synchronization of hidden games, whitelist and blacklist no longer has 30-days limit, you can synchronize as often as you want to (#4).
+
+## Support
+
+For general support in regards to ESGST (e.g. bugs), you should use **[original repo issues](https://github.com/SquishedPotatoe/esgst/issues)**, as we do not offer any of that.
+For things exclusive to A-ESGST, e.g. enhancement suggestions or bugs that do not exist in original ESGST version, use **[repo issues](https://github.com/JustArchi/ESGST/issues)**.
+
+---
+
+Original `README.md` further below.
+
+---
+
 # Enhanced SteamGifts & SteamTrades (ESGST Potatoe edition)
 
 An extension / userscript that adds some cool features to SteamGifts and SteamTrades.
