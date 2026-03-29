@@ -8,7 +8,7 @@ import { browser } from '../browser';
 
 class PersistentStorage {
 	constructor() {
-		this.currentVersion = 15;
+		this.currentVersion = 17;
 
 		this.defaultValues = {
 			decryptedGiveaways: '{}',
@@ -870,6 +870,28 @@ class PersistentStorage {
 					return item;
 				});
 
+				settingsChanged = true;
+			}
+
+			if (settingsChanged) {
+				toSet.settings = JSON.stringify(settings);
+				storage.settings = toSet.settings;
+			}
+		}
+
+		if (version < 17) {
+			window.console.log('Upgrading storage to version 17...');
+
+			let settingsChanged = false;
+			const settings = JSON.parse(storage.settings);
+
+			if (typeof settings.ags_app === 'boolean') {
+				settings.ags_app = '';
+				settingsChanged = true;
+			}
+
+			if (typeof settings.ags_sub === 'boolean') {
+				settings.ags_sub = '';
 				settingsChanged = true;
 			}
 
