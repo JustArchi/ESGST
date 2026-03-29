@@ -108,6 +108,7 @@ class SettingsModule {
 				onClick: async () => {
 					for (const item of this.collapseButtons) {
 						this.collapseSection(item.collapseButton, item.id, item.subMenu);
+						item.isExpanded = false;
 					}
 				},
 			},
@@ -125,6 +126,7 @@ class SettingsModule {
 				onClick: async () => {
 					for (const item of this.collapseButtons) {
 						this.expandSection(item.collapseButton, item.id, item.subMenu);
+						item.isExpanded = false;
 					}
 				},
 			},
@@ -349,7 +351,6 @@ class SettingsModule {
 		}
 
 		input.addEventListener('input', (event) => this.filterSm(event));
-		input.addEventListener('change', (event) => this.filterSm(event));
 		Context.classList.add('esgst-menu-layer');
 		DOM.insert(
 			Context,
@@ -443,7 +444,7 @@ class SettingsModule {
 				}
 			}
 		}
-		i = 1;
+		i = 0;
 		if (browser.runtime.getURL) {
 			const permissionsSection = this.createMenuSection(
 				SMMenu,
@@ -461,58 +462,56 @@ class SettingsModule {
 		}
 		for (type in Shared.esgst.features) {
 			if (Shared.esgst.features.hasOwnProperty(type)) {
-				if (type !== 'trades' || Settings.get('esgst_st')) {
-					let id,
-						j,
-						section,
-						title,
-						isNew = false;
-					title = type.replace(/^./, (m) => {
-						return m.toUpperCase();
-					});
-					section = this.createMenuSection(SMMenu, null, i, title, type);
-					j = 1;
-					for (id in Shared.esgst.features[type].features) {
-						if (Shared.esgst.features[type].features.hasOwnProperty(id)) {
-							if (id === 'common') {
-								continue;
-							}
-							let feature, ft;
-							feature = Shared.esgst.features[type].features[id];
-							if (!feature.sg && feature.st && !Settings.get('esgst_st') && id !== 'esgst') {
-								continue;
-							}
-							ft = this.getSMFeature(feature, id, j, `${i}.${j}`, popup);
-							if (ft) {
-								if (ft.isNew) {
-									isNew = true;
-								}
-								section.lastElementChild.appendChild(ft.menu);
-								j += 1;
-							}
-						}
-					}
-					if (isNew) {
-						Shared.common.createElements(section.firstElementChild.lastElementChild, 'afterbegin', [
-							{
-								attributes: {
-									class: 'esgst-bold esgst-red esgst-new-indicator',
-									title: 'There is a new feature/option in this section',
-								},
-								type: 'span',
-								children: [
-									{
-										attributes: {
-											class: 'fa fa-star',
-										},
-										type: 'i',
-									},
-								],
-							},
-						]);
-					}
-					i += 1;
+				let id,
+					j,
+					section,
+					title,
+					isNew = false;
+				title = type.replace(/^./, (m) => {
+					return m.toUpperCase();
+				});
+				section = this.createMenuSection(SMMenu, null, i, title, type);
+				if (type === 'trades' && !Settings.get('esgst_st')) {
+					section.classList.add('esgst-hidden');
 				}
+				j = 1;
+				for (id in Shared.esgst.features[type].features) {
+					if (Shared.esgst.features[type].features.hasOwnProperty(id)) {
+						if (id === 'common') {
+							continue;
+						}
+						let feature, ft;
+						feature = Shared.esgst.features[type].features[id];
+						ft = this.getSMFeature(feature, id, j, `${i}.${j}`, popup);
+						if (ft) {
+							if (ft.isNew) {
+								isNew = true;
+							}
+							section.lastElementChild.appendChild(ft.menu);
+						}
+						j += 1;
+					}
+				}
+				if (isNew) {
+					Shared.common.createElements(section.firstElementChild.lastElementChild, 'afterbegin', [
+						{
+							attributes: {
+								class: 'esgst-bold esgst-red esgst-new-indicator',
+								title: 'There is a new feature/option in this section',
+							},
+							type: 'span',
+							children: [
+								{
+									attributes: {
+										class: 'fa fa-star',
+									},
+									type: 'i',
+								},
+							],
+						},
+					]);
+				}
+				i += 1;
 			}
 		}
 		const elementOrdering = this.createMenuSection(
@@ -1317,7 +1316,7 @@ class SettingsModule {
 					></i>
 				</div>
 				<div {...obj.include}></div>
-				<div className="esgst-button-group">
+				<div className="esgst-button-group esgst-paths">
 					{
 						Button.create({
 							color: 'white',
@@ -1336,7 +1335,7 @@ class SettingsModule {
 					></i>
 				</div>
 				<div {...obj.exclude}></div>
-				<div className="esgst-button-group">
+				<div className="esgst-button-group esgst-paths">
 					{
 						Button.create({
 							color: 'white',
@@ -1554,8 +1553,12 @@ class SettingsModule {
 
 	getSMFeature(feature, id, number, numberPath, popup) {
 		const featureId = feature.alias ?? id;
+		const hideTrades = feature.st && !feature.sg && !Settings.get('esgst_st') && featureId !== 'esgst';
 		const menuContainer = document.createElement('div');
 		menuContainer.className = 'esgst-sm-feature-container';
+		if (hideTrades) {
+			menuContainer.classList.add('esgst-hidden');
+		}
 		menuContainer.id = `esgst_${id}`;
 		let menu;
 		DOM.insert(
@@ -1804,17 +1807,14 @@ class SettingsModule {
 					continue;
 				}
 				const subFt = feature.features[subId];
-				if (!subFt.sg && subFt.st && !Settings.get('esgst_st') && featureId !== 'esgst') {
-					continue;
-				}
 				const subFeature = this.getSMFeature(subFt, subId, i, `${numberPath}.${i}`, popup);
 				if (subFeature) {
 					if (subFeature.isNew) {
 						isNew = true;
 					}
 					subMenu.appendChild(subFeature.menu);
-					i += 1;
 				}
+				i += 1;
 			}
 			isMainNew = isMainNew || isNew;
 			if (isNew) {
@@ -1857,14 +1857,22 @@ class SettingsModule {
 				]);
 				if (Settings.get(`collapse_${id}`)) {
 					subMenu.classList.add('esgst-hidden');
-					isExpanded = false;
-				} else {
-					isExpanded = true;
 				}
-				this.collapseButtons.push({ collapseButton, id, subMenu });
+				isExpanded = !subMenu.classList.contains('esgst-hidden');
+				Shared.common.createElements(collapseButton, 'atinner', [
+					{
+						attributes: {
+							class: `fa fa-${isExpanded ? 'minus' : 'plus'}-square`,
+							title: `${isExpanded ? 'Collapse' : 'Expand'} options`,
+						},
+						type: 'i',
+					},
+				]);
+				const collapseItem = { collapseButton, id, subMenu, isExpanded };
+				this.collapseButtons.push(collapseItem);
 				collapseButton.addEventListener(
 					'click',
-					() => (isExpanded = this.collapseOrExpandSection(collapseButton, id, subMenu, isExpanded))
+					() => (collapseItem.isExpanded = this.collapseOrExpandSection(collapseButton, id, subMenu, collapseItem.isExpanded))
 				);
 			}
 		} else if (Settings.get('makeSectionsCollapsible')) {
@@ -2978,21 +2986,21 @@ class SettingsModule {
 								text: `${number}.`,
 								type: 'div',
 							},
-{
-	attributes: {
-		class: 'icon_to_clipboard',
-		'data-clipboard-text': `https://www.steamgifts.com/account/settings/profile?esgst=settings&id=${type}`,
-	},
-	type: 'span',
-	children: [
-		{
-			attributes: {
-				class: 'fa fa-fw fa-copy',
-			},
-			type: 'i',
-		},
-	],
-},
+							{
+								attributes: {
+									class: 'icon_to_clipboard',
+									'data-clipboard-text': `https://www.steamgifts.com/account/settings/profile?esgst=settings&id=${type}`,
+								},
+								type: 'span',
+								children: [
+									{
+										attributes: {
+											class: 'fa fa-fw fa-copy',
+										},
+										type: 'i',
+									},
+								],
+							},
 							{
 								attributes: {
 									class: 'esgst-form-heading-text',
@@ -3040,14 +3048,22 @@ class SettingsModule {
 			containerr = section.lastElementChild;
 			if (Settings.get(`collapse_${type}`)) {
 				containerr.classList.add('esgst-hidden');
-				isExpanded = false;
-			} else {
-				isExpanded = true;
 			}
-			this.collapseButtons.push({ collapseButton: button, id: type, subMenu: containerr });
+			isExpanded = !containerr.classList.contains('esgst-hidden');
+			Shared.common.createElements(button, 'atinner', [
+				{
+					attributes: {
+						class: `fa fa-${isExpanded ? 'minus' : 'plus'}-square`,
+						title: `${isExpanded ? 'Collapse' : 'Expand'} section`,
+					},
+					type: 'i',
+				},
+			]);
+			const collapseItem = { collapseButton: button, id: type, subMenu: containerr, isExpanded };
+			this.collapseButtons.push(collapseItem);
 			button.addEventListener(
 				'click',
-				() => (isExpanded = this.collapseOrExpandSection(button, type, containerr, isExpanded))
+				() => (collapseItem.isExpanded = this.collapseOrExpandSection(button, type, containerr, collapseItem.isExpanded))
 			);
 		}
 		return section;
