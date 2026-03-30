@@ -757,9 +757,6 @@ class Common extends Module {
 			discussions: {
 				features: {},
 			},
-			trades: {
-				features: {},
-			},
 			comments: {
 				features: {},
 			},
@@ -770,6 +767,9 @@ class Common extends Module {
 				features: {},
 			},
 			games: {
+				features: {},
+			},
+			trades: {
 				features: {},
 			},
 			others: {
@@ -1597,7 +1597,7 @@ class Common extends Module {
 	}
 
 	getFeatureNumber(queryId) {
-		let n = browser.runtime.getURL ? 2 : 1;
+		let n = 1;
 		for (let type in this.esgst.features) {
 			if (this.esgst.features.hasOwnProperty(type)) {
 				let i = 1;
@@ -1608,14 +1608,10 @@ class Common extends Module {
 						if (result) {
 							return result;
 						}
-						if (feature.sg || Settings.get('esgst_st')) {
-							i += 1;
-						}
+						i += 1;
 					}
 				}
-				if (type !== 'trades' || Settings.get('esgst_st')) {
-					n += 1;
-				}
+				n += 1;
 			}
 		}
 		return {
@@ -1640,9 +1636,7 @@ class Common extends Module {
 					if (result) {
 						return result;
 					}
-					if (subFeature.sg || Settings.get('esgst_st')) {
-						j += 1;
-					}
+					j += 1;
 				}
 			}
 		}
@@ -5438,31 +5432,8 @@ class Common extends Module {
 	}
 
 	async hideGames(obj, unhide) {
-		const isUsingServer = await permissions.contains([['server']]);
+		let api = await this.SgdbCache(obj.update);
 		let hasCacheChanged = false;
-		let api = JSON.parse(this.getValue('sgdbCache', `{ "lastUpdate": 0 }`));
-		if (!dateFns_isSameWeek(Date.now(), api.lastUpdate)) {
-			if (isUsingServer) {
-				obj.update && obj.update('Updating API cache...');
-
-				try {
-					const response = await FetchRequest.get('https://esgst.rafaelgomes.xyz/api/games/sgids');
-					api = {
-						cache: {
-							appids: response.json.result.found.apps,
-							subids: response.json.result.found.subs,
-						},
-						lastUpdate: Date.now(),
-					};
-				} catch (err) {}
-			} else {
-				api = {
-					cache: { appids: {}, subids: {} },
-					lastUpdate: Date.now(),
-				};
-			}
-			hasCacheChanged = true;
-		}
 
 		obj.update && obj.update('Retrieving ids from cache...');
 
@@ -5483,6 +5454,7 @@ class Common extends Module {
 				ids.push(id);
 				games.apps[appId] = { hidden: unhide ? null : true, sgId: id };
 			} else if (id === 0) {
+				hasCacheChanged = true;
 				appsNotFound.push(appId);
 			} else {
 				appsToFetch.push(appId);
@@ -5499,6 +5471,7 @@ class Common extends Module {
 				ids.push(id);
 				games.subs[subId] = { hidden: unhide ? null : true, sgId: id };
 			} else if (id === 0) {
+				hasCacheChanged = true;
 				subsNotFound.push(subId);
 			} else {
 				subsToFetch.push(subId);
@@ -5513,6 +5486,7 @@ class Common extends Module {
 				ids.push(id);
 				games.apps[appId] = { hidden: unhide ? null : true, sgId: id };
 			} else {
+				hasCacheChanged = true;
 				api.cache.appids[appId] = 0;
 				appsNotFound.push(appId);
 			}
@@ -5526,6 +5500,7 @@ class Common extends Module {
 				ids.push(id);
 				games.subs[subId] = { hidden: unhide ? null : true, sgId: id };
 			} else {
+				hasCacheChanged = true;
 				api.cache.subids[subId] = 0;
 				subsNotFound.push(subId);
 			}
@@ -5568,6 +5543,35 @@ class Common extends Module {
 		obj.update && obj.update('');
 
 		return { apps: appsNotFound, subs: subsNotFound };
+	}
+
+	async SgdbCache(update) {
+		const isUsingServer = await permissions.contains([['server']]);
+		let api = JSON.parse(this.getValue('sgdbCache', `{ "lastUpdate": 0 }`));
+		if (!dateFns_isSameWeek(Date.now(), api.lastUpdate)) {
+			if (isUsingServer) {
+				update && update('Updating API cache...');
+
+				try {
+					const response = await FetchRequest.get('https://esgst.rafaelgomes.xyz/api/games/sgids');
+					api = {
+						cache: {
+							appids: response.json.result.found.apps,
+							subids: response.json.result.found.subs,
+						},
+						lastUpdate: Date.now(),
+					};
+				} catch (err) { }
+			} else {
+				api = {
+					cache: { appids: {}, subids: {} },
+					lastUpdate: Date.now(),
+				};
+			}
+			await this.setValue('sgdbCache', JSON.stringify(api));
+		}
+
+		return api;
 	}
 
 	async getGameSgId(id, type) {
