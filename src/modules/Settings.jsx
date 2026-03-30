@@ -2099,6 +2099,9 @@ class SettingsModule {
 							event.stopPropagation();
 							if (!event.repeat) {
 								value = '';
+								if (typeof event.key !== 'string') {
+									return;
+								}
 								if (event.ctrlKey) {
 									value += 'ctrlKey + ';
 								} else if (event.shiftKey) {
