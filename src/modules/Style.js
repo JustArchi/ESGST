@@ -552,8 +552,8 @@ function addStyle() {
 	}
 
 	.esgst-hwlc-section {
-		margin: 25px;
-		width: 300px;
+		margin: 5px;
+		width: 400px;
 	}
 
 	.esgst-hwlc-section textarea {
@@ -1521,6 +1521,32 @@ function addStyle() {
 		top: 0;
 	}
 
+	.page__heading:not(.esgst-fmph) + .esgst-gf-container {
+		margin-top:5px;
+		top: 0;
+		padding: 0;
+	}
+
+	.esgst-fh ~ .page__outer-wrap .esgst-fmph {
+		top: 39px;
+	}
+
+	.esgst-fh ~ .page__outer-wrap .esgst-fmph + .esgst-gf-container {
+		top: 84px;
+	}
+
+	.esgst-fh ~ .page__outer-wrap .page__heading:not(.esgst-fmph) + .esgst-gf-container {
+		top: 39px;
+	}
+
+	.esgst-popup .page__heading:not(.esgst-fmph) + .esgst-gf-container {
+		top: unset;
+	}
+
+	.page__heading {
+		z-index: 999;
+	}
+
 	.esgst-ff {
 		background-color: inherit;
 		bottom: 0;
@@ -1910,12 +1936,18 @@ function addStyle() {
 		margin: 0 0 5px 0 !important;
 	}
 
-	.esgst-popup-description >*:not(.esgst-tag-suggestions):not(.page__heading):not(.page_heading):not(.esgst-notification-bar):not(.esgst-gf-container), .esgst-popup-scrollable >* {
+	.esgst-popup-description >*:not(.esgst-tag-suggestions):not(.page__heading):not(.page_heading):not(.esgst-notification-bar):not(.esgst-gf-container):not(.esgst-switch-input), .esgst-popup-scrollable >* {
 		margin: 10px 0 0 !important;
 	}
 
 	.esgst-popup-description >*:not(.esgst-tag-suggestions):not(.page__heading):not(.page_heading):not(.esgst-notification-bar):not(.esgst-gf-container).esgst-button.form__submit-button, .esgst-popup-description >*:not(.esgst-tag-suggestions):not(.page__heading):not(.page_heading):not(.esgst-notification-bar):not(.esgst-gf-container).esgst-button.btn_action {
 		margin-right: 8px !important;
+	}
+
+	.esgst-tf-popup .esgst-switch-input {
+		height: unset;
+		margin: 0 5px 10px 0 !important;
+		padding: 7px !important;
 	}
 
 	.esgst-sync-area .esgst-notification-bar {
@@ -1973,6 +2005,10 @@ function addStyle() {
 	.esgst-popup-icon {
 		font-size: 25px;
 		margin-right: 10px;
+	}
+
+	.esgst-rate-limit-popup > .esgst-popup-heading > .esgst-popup-icon {
+		font-size: 52px;
 	}
 
 	.esgst-popup-title {
@@ -3199,18 +3235,6 @@ function addStyle() {
 
 			.popup__keys__list>div {
 				padding: 5px 10px;
-			}
-
-			#esgst-hwlc-have-games, #esgst-hwlc-want-games {
-				border-left: 5px solid;
-			}
-
-			#esgst-hwlc-have-games {
-				border-left-color: #e1868c !important;
-			}
-
-			#esgst-hwlc-want-games {
-				border-left-color: #6bbfdb !important;
 			}
 
 			.esgst-hwlc-panel.markdown ul, .esgst-hwlc-panel.markdown ol {
