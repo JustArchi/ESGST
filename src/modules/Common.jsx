@@ -769,9 +769,6 @@ class Common extends Module {
 			games: {
 				features: {},
 			},
-			trades: {
-				features: {},
-			},
 			others: {
 				features: {
 					limitSteamStore: {
@@ -1074,6 +1071,9 @@ class Common extends Module {
 						st: true,
 					},
 				},
+			},
+			trades: {
+				features: {},
 			},
 		};
 		for (const type in features) {
