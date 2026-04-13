@@ -45,13 +45,6 @@ class Permissions {
 				},
 				values: ['*://*.googleapis.com/*'],
 			},
-			googleWebApp: {
-				isOrigin: true,
-				messages: {
-					sync: 'Required to sync HLTB times.',
-				},
-				values: ['*://*.script.google.com/*', '*://*.script.googleusercontent.com/*'],
-			},
 			imgur: {
 				isOrigin: true,
 				messages: {
