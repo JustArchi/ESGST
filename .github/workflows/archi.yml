@@ -10,6 +10,7 @@ env:
   GITHUB_UPSTREAM_BRANCH: 'main'
   GITHUB_UPSTREAM_REPO: 'https://github.com/SquishedPotatoe/esgst'
   NODE_JS_VERSION: 'lts/*'
+  PNPM_VERSION: 'latest'
 
 jobs:
   update:
@@ -30,9 +31,9 @@ jobs:
         node-version: ${{ env.NODE_JS_VERSION }}
 
     - name: Setup pnpm
-      uses: pnpm/action-setup@v4
+      uses: pnpm/action-setup@v6
       with:
-        version: latest
+        version: ${{ env.PNPM_VERSION }}
 
     - name: Verify Node.js
       run: node -v
