@@ -3151,6 +3151,15 @@ function addStyle() {
 	.esgst-paths {
 		padding:5px 0;
 	}
+
+	.esgst-ts-button > i, .esgst-hgitb-header > i {
+		margin-left: 3px;
+		vertical-align: baseline;
+	}
+
+	.esgst-hgitb-cell {
+		text-align: center;
+	}
 `;
 	if (!Shared.esgst.sg) {
 		style += `
