@@ -313,7 +313,7 @@ function addStyle() {
 	}
 
 	.esgst-tds-item-active {
-		background-color: #eee;
+		background-color: rgba(150, 196, 104, 0.2);
 	}
 
 	.esgst-tds-item-name {
@@ -2735,8 +2735,12 @@ function addStyle() {
 		text-align: center;
 	}
 
-	.esgst-gv-view.pinned-giveaways__inner-wrap--minimized .giveaway__row-outer-wrap:nth-child(-n + 10) {
-		display: inline-block;
+	.esgst-mgc-giveaways {
+		background-color: #e8eaef;
+		border: 1px solid #d2d6e0;
+		border-radius: 4px;
+		margin-bottom: 15px;
+		padding: 0 15px;
 	}
 
 	.esgst-gv-container {
@@ -3150,6 +3154,15 @@ function addStyle() {
 
 	.esgst-paths {
 		padding:5px 0;
+	}
+
+	.esgst-ts-button > i, .esgst-hgitb-header > i {
+		margin-left: 3px;
+		vertical-align: baseline;
+	}
+
+	.esgst-hgitb-cell {
+		text-align: center;
 	}
 `;
 	if (!Shared.esgst.sg) {

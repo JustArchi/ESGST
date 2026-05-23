@@ -42,7 +42,7 @@ class GiveawaysAdvancedGiveawaySearch extends Module {
 	ags_parseUrlParams() {
 		const params = new URLSearchParams(window.location.search);
 		const result = {};
-		for (const [key, value] of params.entries()) result[key] = value;
+		params.forEach((value, key) => { result[key] = value; });
 		return result;
 	}
 

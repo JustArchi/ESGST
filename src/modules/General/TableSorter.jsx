@@ -232,6 +232,7 @@ class GeneralTableSorter extends Module {
 				`.table__column--width-fill, .table__column--width-medium, .table__column--width-small, .column_flex, .column_medium, .column_small, td`
 			)[i];
 			value = column && column.textContent.trim();
+			const hasSortValue = column && column.hasAttribute('data-sort-value');
 			element = {
 				outerWrap: row,
 				sortIndex: 0,
@@ -243,8 +244,8 @@ class GeneralTableSorter extends Module {
 				element.sortIndex = j;
 				row.setAttribute('data-sort-index', j);
 			}
-			if ((value && value.length > 0) || columnName === 'Trending') {
-				if (column.hasAttribute('data-sort-value')) {
+			if (hasSortValue || (value && value.length > 0) || columnName === 'Trending') {
+				if (hasSortValue) {
 					element.value = parseFloat(column.getAttribute('data-sort-value'));
 				} else {
 					switch (columnName) {

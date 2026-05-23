@@ -444,9 +444,8 @@ class GeneralThreadSubscription extends Module {
 			return;
 		}
 
-		this.updateItems(await Shared.common.getTds());
-
 		if (this.nextRun && this.nextRun > Date.now()) {
+			this.updateItems(await Shared.common.getTds());
 			this.scheduleRun(this.nextRun - Date.now());
 			return;
 		}
