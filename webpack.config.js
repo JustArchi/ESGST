@@ -86,8 +86,6 @@ function getWebExtensionManifest(env, browserName) {
 			'*://*.isthereanydeal.com/*',
 			'*://*.esgst.rafaelgomes.xyz/*',
 			'*://*.raw.githubusercontent.com/*',
-			'*://*.script.google.com/*',
-			'*://*.script.googleusercontent.com/*',
 			'*://*.steam-tracker.com/*',
 			'*://*.steamcommunity.com/*',
 			'*://*.store.steampowered.com/*',
