@@ -2,8 +2,6 @@ import { setBrowser } from './browser';
 import { RequestQueue } from './class/Queue';
 import { Shared } from './class/Shared';
 
-RequestQueue.init();
-
 let tdsData = [];
 
 const browser = {
@@ -165,6 +163,40 @@ const browser = {
 
 browser.gm = GM;
 browser.gm.lastUpdate = 0;
+
+const lastRequests = {};
+
+RequestQueue.getLastRequest = (key) => {
+	return lastRequests[key] ?? 0;
+};
+
+RequestQueue.setLastRequest = (key, lastRequest) => {
+	lastRequests[key] = lastRequest;
+};
+
+RequestQueue.getRequestThresholds = async () => {
+	const values = await browser.storage.local.get('settings');
+	const settings = values.settings ? JSON.parse(values.settings) : {};
+	if (settings['useCustomAdaReqLim_sg'].enabled) {
+		const thresholds = {};
+		for (const [key, minThreshold] of Object.entries(RequestQueue.queue.sg.minThresholds)) {
+			thresholds[key] = parseFloat(settings[`customAdaReqLim_${key}`] ?? 0.0);
+			if (thresholds[key] < minThreshold) {
+				thresholds[key] = minThreshold;
+			}
+		}
+		return thresholds;
+	} else {
+		return { ...RequestQueue.queue.sg.minThresholds };
+	}
+};
+
+RequestQueue.getRequestLog = async () => {
+	const values = await browser.storage.local.get('requestLog');
+	return JSON.parse(values.requestLog);
+};
+
+RequestQueue.init();
 
 if (!browser.gm.addValueChangeListener) {
 	browser.gm.hasValueChanged = async (key, oldValue, callback) => {
