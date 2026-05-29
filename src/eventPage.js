@@ -309,11 +309,13 @@ browser.runtime.onMessage.addListener((request, sender) => {
 		let parameters;
 		switch (request.action) {
 			case 'get-tds':
+				({ tdsData = [] } = await browser.storage.local.get('tdsData'));
 				resolve(JSON.stringify(tdsData));
 
 				break;
 			case 'notify-tds':
 				tdsData = JSON.parse(request.data);
+				await browser.storage.local.set({ tdsData });
 
 				sendMessage('notify-tds', null, tdsData, true);
 

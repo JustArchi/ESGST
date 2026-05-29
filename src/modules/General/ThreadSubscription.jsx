@@ -5,6 +5,7 @@ import { Module } from '../../class/Module';
 import { Popout } from '../../class/Popout';
 import { Settings } from '../../class/Settings';
 import { Shared } from '../../class/Shared';
+import { browser } from '../../browser';
 
 class GeneralThreadSubscription extends Module {
 	constructor() {
@@ -312,18 +313,50 @@ class GeneralThreadSubscription extends Module {
 	}
 
 	async loadSchedule() {
-		const result = await chrome.storage.local.get('tdsNextRun');
+		const result = await browser.storage.local.get('tdsNextRun');
 		this.nextRun = typeof result.tdsNextRun === 'number' ? result.tdsNextRun : null;
 	}
 
 	async saveSchedule(nextRun) {
 		this.nextRun = nextRun;
-		await chrome.storage.local.set({ tdsNextRun: nextRun });
+		await browser.storage.local.set({ tdsNextRun: nextRun });
 	}
 
 	scheduleRun(time) {
 		const clampedTime = Math.max(45000, time);
-		window.setTimeout(this.runDaemon.bind(this, false), clampedTime);
+		window.setTimeout(this.runScheduledDaemon.bind(this), clampedTime);
+	}
+
+	retryScheduledDaemon() {
+		window.setTimeout(this.runScheduledDaemon.bind(this), 5000);
+	}
+
+	async runScheduledDaemon() {
+		if (this.lock?.isLocked) {
+			await this.runDaemon(false);
+			return;
+		}
+
+		const lock = new Lock('tds', {
+			threshold: 300,
+			timeout: this.minutes + 15000,
+			tryOnce: true,
+		});
+		await lock.lock();
+
+		if (!lock.isLocked) {
+			this.updateItems(await Shared.common.getTds());
+			await this.loadSchedule();
+			if (this.nextRun && this.nextRun > Date.now()) {
+				this.scheduleRun(this.nextRun - Date.now());
+			} else {
+				this.retryScheduledDaemon();
+			}
+			return;
+		}
+
+		this.lock = lock;
+		await this.runDaemon(false);
 	}
 
 	async runDaemon(firstRun) {
@@ -440,6 +473,9 @@ class GeneralThreadSubscription extends Module {
 			//Logger.info('TDS Daemon already running....');
 
 			this.updateItems(await Shared.common.getTds());
+			if (this.nextRun && this.nextRun > Date.now()) {
+				this.scheduleRun(this.nextRun - Date.now());
+			}
 
 			return;
 		}

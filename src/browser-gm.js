@@ -18,11 +18,13 @@ const browser = {
 			return new Promise(async (resolve) => {
 				switch (obj.action) {
 					case 'get-tds':
+						tdsData = JSON.parse(await browser.gm.getValue('tdsData', '[]'));
 						resolve(JSON.stringify(tdsData));
 
 						break;
 					case 'notify-tds':
 						tdsData = JSON.parse(obj.data);
+						await browser.gm.setValue('tdsData', JSON.stringify(tdsData));
 
 						browser.gm.listener(
 							JSON.stringify({
