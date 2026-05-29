@@ -444,7 +444,7 @@ class SettingsModule {
 				}
 			}
 		}
-		i = 0;
+		i = browser.runtime.getURL ? 0 : 1;
 		if (browser.runtime.getURL) {
 			const permissionsSection = this.createMenuSection(
 				SMMenu,

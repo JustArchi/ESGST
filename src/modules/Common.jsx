@@ -1603,6 +1603,9 @@ class Common extends Module {
 				let i = 1;
 				for (let id in this.esgst.features[type].features) {
 					if (this.esgst.features[type].features.hasOwnProperty(id)) {
+						if (id === 'common') {
+							continue;
+						}
 						let feature = this.esgst.features[type].features[id];
 						let result = this.getFeatureNumber_2(feature, id, i, n, queryId);
 						if (result) {
@@ -1631,6 +1634,9 @@ class Common extends Module {
 			let j = 1;
 			for (let id in feature.features) {
 				if (feature.features.hasOwnProperty(id)) {
+					if (id === 'common') {
+						continue;
+					}
 					let subFeature = feature.features[id];
 					let result = this.getFeatureNumber_2(subFeature, id, j, `${n}.${i}`, queryId);
 					if (result) {
