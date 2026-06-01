@@ -14,7 +14,7 @@ RequestQueue.setLastRequest = (key, lastRequest) => {
 RequestQueue.getRequestThresholds = async () => {
 	const values = await browser.storage.local.get('settings');
 	const settings = values.settings ? JSON.parse(values.settings) : {};
-	if (settings['useCustomAdaReqLim_sg']) {
+	if (settings['useCustomAdaReqLim_sg'].enabled) {
 		const thresholds = {};
 		for (const [key, minThreshold] of Object.entries(RequestQueue.queue.sg.minThresholds)) {
 			thresholds[key] = parseFloat(settings[`customAdaReqLim_${key}`] ?? 0.0);
@@ -309,11 +309,13 @@ browser.runtime.onMessage.addListener((request, sender) => {
 		let parameters;
 		switch (request.action) {
 			case 'get-tds':
+				({ tdsData = [] } = await browser.storage.local.get('tdsData'));
 				resolve(JSON.stringify(tdsData));
 
 				break;
 			case 'notify-tds':
 				tdsData = JSON.parse(request.data);
+				await browser.storage.local.set({ tdsData });
 
 				sendMessage('notify-tds', null, tdsData, true);
 

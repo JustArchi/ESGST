@@ -30,7 +30,7 @@ RequestQueue.setLastRequest = (key, lastRequest) => {
 RequestQueue.getRequestThresholds = async () => {
 	const values = await handle_storage(TYPE_GET, { settings: '{}' });
 	const settings = JSON.parse(values.settings);
-	if (settings['useCustomAdaReqLim_sg']) {
+	if (settings['useCustomAdaReqLim_sg'].enabled) {
 		const thresholds = {};
 		for (const [key, minThreshold] of Object.entries(RequestQueue.queue.sg.minThresholds)) {
 			thresholds[key] = parseFloat(settings[`customAdaReqLim_${key}`] ?? 0.0);
@@ -114,12 +114,15 @@ function load() {
 				detachWorker(worker);
 			});
 
-			worker.port.on('get-tds', (request) => {
+			worker.port.on('get-tds', async (request) => {
+				const values = await handle_storage(TYPE_GET, { tdsData: '[]' });
+				tdsData = JSON.parse(values.tdsData);
 				worker.port.emit(`get-tds_${request.uuid}_response`, JSON.stringify(tdsData));
 			});
 
-			worker.port.on('notify-tds', (request) => {
+			worker.port.on('notify-tds', async (request) => {
 				tdsData = JSON.parse(request.data);
+				await handle_storage(TYPE_SET, { tdsData: JSON.stringify(tdsData) });
 
 				sendMessage('notify-tds', null, tdsData, true);
 

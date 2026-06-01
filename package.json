@@ -1,7 +1,7 @@
 {
 	"name": "esgst",
-	"version": "8.11.4",
-	"betaVersion": "8.11.4",
+	"version": "8.11.5",
+	"betaVersion": "8.11.5",
 	"title": "Enhanced SteamGifts & SteamTrades (ESGST Potatoe edition)",
 	"description": "A script that adds some cool features to SteamGifts and SteamTrades.",
 	"author": "rafaelgomesxyz",
@@ -49,9 +49,6 @@
 		"check": "run-s format-check-other tsc lint-check-typed",
 		"fix": "run-s format-other tsc lint-typed",
 		"test": "cross-env NODE_ENV=test karma start"
-	},
-	"@comment dependencies": {
-		"jszip": "Any version higher than 3.3.0 breaks the extension on Pale Moon"
 	},
 	"dependencies": {
 		"@babel/runtime": "^7.11.2",
