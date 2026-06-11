@@ -177,7 +177,7 @@ RequestQueue.setLastRequest = (key, lastRequest) => {
 RequestQueue.getRequestThresholds = async () => {
 	const values = await browser.storage.local.get('settings');
 	const settings = values.settings ? JSON.parse(values.settings) : {};
-	if (settings['useCustomAdaReqLim_sg'].enabled) {
+	if (settings['useCustomAdaReqLim_sg']?.enabled) {
 		const thresholds = {};
 		for (const [key, minThreshold] of Object.entries(RequestQueue.queue.sg.minThresholds)) {
 			thresholds[key] = parseFloat(settings[`customAdaReqLim_${key}`] ?? 0.0);
