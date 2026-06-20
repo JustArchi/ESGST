@@ -2261,7 +2261,8 @@ class SettingsModule {
 	}
 
 	addGwcColorSetting(colors, id, key, panel, background) {
-		let bgColor, color, i, lower, n, remove, setting, upper;
+		let bgColor, color, colorAlpha, i, lower, n, remove, setting, upper;
+		const opacity = id === 'cgb_levelColors';
 		setting = Shared.common.createElements(panel, 'beforeend', [
 			{
 				type: 'div',
@@ -2301,6 +2302,24 @@ class SettingsModule {
 						},
 						type: 'input',
 					},
+					...(opacity
+						? [
+							{
+								text: ' opacity ',
+								type: 'node',
+							},
+							{
+								attributes: {
+									max: '1.0',
+									min: '0.0',
+									step: '0.1',
+									type: 'number',
+									value: rgba2Hex(colors.color).alpha,
+								},
+								type: 'input',
+							},
+						]
+						: []),
 					...(background
 						? [
 								{
@@ -2337,11 +2356,14 @@ class SettingsModule {
 		lower = setting.firstElementChild;
 		upper = lower.nextElementSibling;
 		color = upper.nextElementSibling;
+		if (opacity) {
+			colorAlpha = color.nextElementSibling;
+		}
 		if (background) {
 			bgColor = color.nextElementSibling;
 			remove = bgColor.nextElementSibling;
 		} else {
-			remove = color.nextElementSibling;
+			remove = opacity ? colorAlpha.nextElementSibling : color.nextElementSibling;
 		}
 		lower.addEventListener('change', () => {
 			colors.lower = lower.value;
@@ -2355,6 +2377,12 @@ class SettingsModule {
 			colors.color = color.value;
 			this.preSave(id, Settings.get(id));
 		});
+		if (colorAlpha) {
+			colorAlpha.addEventListener('change', () => {
+				colors.color = hex2Rgba(color.value, colorAlpha.value);
+				this.preSave(id, Settings.get(id));
+			});
+		}
 		if (bgColor) {
 			bgColor.addEventListener('change', () => {
 				colors.bgColor = bgColor.value;
