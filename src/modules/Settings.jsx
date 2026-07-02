@@ -2331,7 +2331,7 @@ class SettingsModule {
 									min: '0.0',
 									step: '0.1',
 									type: 'number',
-									value: rgba2Hex(colors.color).alpha,
+									value: Utils.rgba2Hex(colors.color).alpha,
 								},
 								type: 'input',
 							},
