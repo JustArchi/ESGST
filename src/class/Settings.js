@@ -373,7 +373,7 @@ class _Settings {
 					icon: 'fa-exchange',
 					id: 'notActivatedWins',
 					name: 'Not Activated Wins',
-					url: `https://www.sgtools.info/activation`,
+					url: `https://www.sgtools.info/rules-checker/non-activated`,
 				},
 				{
 					color: 'red',
@@ -381,7 +381,7 @@ class _Settings {
 					icon: 'fa-clone',
 					id: 'multipleWins',
 					name: 'Multiple Wins',
-					url: `https://www.sgtools.info/multiple-wins`,
+					url: `https://www.sgtools.info/rules-checker/multiple-wins`,
 				},
 				{
 					color: 'grey',
@@ -389,7 +389,15 @@ class _Settings {
 					icon: 'fa-percent',
 					id: 'lastBundled',
 					name: 'Last Bundled',
-					url: `https://www.sgtools.info/lastbundled`,
+					url: `https://www.sgtools.info/last-bundled`,
+				},
+				{
+					color: 'grey',
+					description: 'Check the last free games.',
+					icon: 'fa-minus-circle',
+					id: 'lastFree',
+					name: 'Last Free',
+					url: `https://www.sgtools.info/last-free`,
 				},
 			],
 			chfl_help_sg: [

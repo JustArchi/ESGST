@@ -36,13 +36,16 @@ class GiveawaysFollowedGamesPage extends Module {
 			DOM.insert(
 				sidebarLink.parentElement,
 				'afterend',
-				<li className="sidebar__navigation__item">
+				<li className="sidebar__navigation__item" id="esgst-fgp">
 					<a className="sidebar__navigation__item__link" href="/giveaways/search?esgst=fgp">
 						<div className="sidebar__navigation__item__name">Followed</div>
 						<div className="sidebar__navigation__item__underline"></div>
 					</a>
 				</li>
 			);
+			if (Shared.esgst.parameters.esgst === 'fgp') {
+				Shared.common.setSidebarActive('esgst-fgp');
+			}
 		}
 	}
 
