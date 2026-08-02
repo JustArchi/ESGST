@@ -4,7 +4,7 @@
 // @namespace https://SquishedPotatoe.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
-// @version 8.12.0
+// @version 8.12.1
 // @author rafaelgomesxyz
 // @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
@@ -11968,12 +11968,14 @@ __webpack_require__.r(__webpack_exports__);
         case 'storageChanged':
           _class_Shared__WEBPACK_IMPORTED_MODULE_12__["Shared"].common.getChanges(message.values.changes, message.values.areaName);
           break;
-        case 'update':
-          common.createConfirmation(`Hi! A new version of ESGST (${message.values.version}) is available. Do you want to force an update now? If you choose to force an update, ESGST will stop working in any SteamGifts/SteamTrades tab that is open, along with any operation that you might be performing (such as syncing, checking something etc), so you will have to refresh them. If you choose not to force an update, your browser will automatically update the extension when you are not using it (for example, when you restart the browser).`, () => {
-            _browser__WEBPACK_IMPORTED_MODULE_5__["browser"].runtime.sendMessage({
-              action: 'reload'
-            }).then(() => {});
-          }, () => {});
+        case 'showUpdatePopup':
+          common.showUpdatePopup(message.values.currentVersion, message.values.latestVersion);
+          break;
+        case 'showUpToDatePopup':
+          common.showUpToDatePopup(message.values.currentVersion, message.values.latestVersion);
+          break;
+        case 'showUpdateCheckFailed':
+          common.showUpdateCheckFailedPopup();
           break;
       }
     });
@@ -15988,10 +15990,32 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
             st: true
           },
           notifyNewVersion: {
+            description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("li", null, "ESGST checks GitHub for new versions every 7 days by default. You can also check now.")), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
+              className: "esgst-button-group"
+            }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
+              id: "manualCheck",
+              className: "esgst-button form__saving-button",
+              style: {
+                cursor: 'pointer'
+              }
+            }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("i", {
+              className: "fa fa-check-circle"
+            }), " Check now"))),
             name: 'Notify when a new ESGST version is available.',
             extensionOnly: true,
             sg: true,
-            st: true
+            st: true,
+            inputItems: [{
+              id: 'updateCheckInterval',
+              prefix: 'Check for updates every ',
+              suffix: ' days (default is 7)',
+              attributes: {
+                type: 'number',
+                min: '1',
+                step: '1'
+              }
+            }],
+            permissions: ['github']
           },
           makeSectionsCollapsible: {
             description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("li", null, "The state of the sections is remembered if you save the settings after collapsing/expanding them.")),
@@ -16207,8 +16231,8 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
           icon: 'fa-check',
           isTemp: true,
           title: _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("fragment", null, "ESGST has updated from v", _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.previousVersion, " to v", _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.currentVersion, "! Please go to", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("a", {
-            href: "https://github.com/SquishedPotatoe/esgst/-/releases"
-          }, "https://github.com/SquishedPotatoe/esgst/-/releases"), ' ', "to view the changelog. If you want the changelog to be automatically retrieved from GitHub and shown in this popup when updating, then go to the settings menu and grant permission to \"github.com\"")
+            href: `https://github.com/SquishedPotatoe/esgst/releases/tag/v${_class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.currentVersion}`
+          }, "https://github.com/SquishedPotatoe/esgst/releases/tag/v", _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.currentVersion), ' ', "to view the changelog. If you want the changelog to be automatically retrieved from GitHub and shown in this popup when updating, then go to the settings menu and grant permission to \"github.com\"")
         }).open();
         _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.isUpdate = false;
         return;
@@ -16254,6 +16278,70 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
       }
       _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.isUpdate = false;
     }
+    const browserInfo = await this.getBrowserInfo().catch(() => ({
+      name: '?'
+    }));
+    if (browserInfo.name === 'userscript') return;
+    _browser__WEBPACK_IMPORTED_MODULE_13__["browser"].runtime.sendMessage({
+      action: 'pendingUpdateCheck'
+    }).catch(() => {});
+    document.body.addEventListener('click', async event => {
+      const button = event.target.closest('#manualCheck');
+      if (!button) return;
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<i class="fa fa-circle-o-notch fa-spin"></i> Checking...';
+      button.disabled = true;
+      try {
+        await _browser__WEBPACK_IMPORTED_MODULE_13__["browser"].runtime.sendMessage({
+          action: 'manualCheckVersion'
+        });
+      } finally {
+        button.innerHTML = originalHtml;
+        button.disabled = false;
+      }
+    });
+  }
+  showUpdatePopup(currentVersion, latestVersion) {
+    var _document$querySelect;
+    document.querySelectorAll('.esgst-update-bar').forEach(element => element.remove());
+    const bar = _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
+      className: "esgst-notification-bar notification notification--info esgst-update-bar"
+    }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("i", {
+      className: "fa fa-info-circle"
+    }), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("span", null, "A new ESGST version is available: ", _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("strong", null, latestVersion), " (you have ", currentVersion, ")."), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("a", {
+      href: `https://github.com/SquishedPotatoe/esgst/releases/tag/v${latestVersion}`,
+      target: "_blank",
+      className: "esgst-update-link"
+    }, " View Release"), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("button", {
+      className: "esgst-button form__saving-button esgst-update-dismiss"
+    }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("i", {
+      className: "fa fa-times"
+    }), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("span", null, " close")));
+    _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].insert(document.body, 'afterbegin', bar);
+    (_document$querySelect = document.querySelector('.esgst-update-dismiss')) === null || _document$querySelect === void 0 || _document$querySelect.addEventListener('click', () => {
+      var _document$querySelect2;
+      (_document$querySelect2 = document.querySelector('.esgst-update-bar')) === null || _document$querySelect2 === void 0 || _document$querySelect2.remove();
+      _browser__WEBPACK_IMPORTED_MODULE_13__["browser"].runtime.sendMessage({
+        action: 'dismissUpdateNotification',
+        version: latestVersion
+      }).catch(() => {});
+    });
+  }
+  showUpToDatePopup(currentVersion, latestVersion) {
+    new _class_Popup__WEBPACK_IMPORTED_MODULE_23__["Popup"]({
+      addScrollable: true,
+      icon: 'fa-bell',
+      isTemp: true,
+      title: `You are already running the latest version of ESGST. Latest version: ${latestVersion || currentVersion} (you have ${currentVersion}).`
+    }).open();
+  }
+  showUpdateCheckFailedPopup() {
+    new _class_Popup__WEBPACK_IMPORTED_MODULE_23__["Popup"]({
+      addScrollable: true,
+      icon: 'fa-times',
+      isTemp: true,
+      title: 'Unable to check GitHub for a newer ESGST version. Please try again later.'
+    }).open();
   }
   async parseMarkdown(context, string) {
     const obj = {
@@ -95257,6 +95345,30 @@ function addStyle() {
 		font-weight: bold;
 		margin-top: 10px;
 		text-decoration: underline;
+	}
+
+	.esgst-update-bar {
+		display: flex;
+		font-size: large;
+		gap: 10px;
+		justify-content: center;
+		line-height: 32px!important;
+		margin: 8px 25px;
+		padding: 7px 15px;
+		position: relative;
+		top: 0;
+		z-index: 2000;
+	}
+
+	.esgst-update-bar i {
+		font-size: 18px;
+		line-height: 32px;
+
+	}
+
+	.esgst-update-dismiss {
+		font-size: large;
+		cursor: pointer;
 	}
 
 	.esgst-popup-modal {
