@@ -4,7 +4,7 @@
 // @namespace https://SquishedPotatoe.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
-// @version 8.12.1
+// @version 8.12.2
 // @author rafaelgomesxyz
 // @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
@@ -15990,17 +15990,17 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
             st: true
           },
           notifyNewVersion: {
-            description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("li", null, "ESGST checks GitHub for new versions every 7 days by default. You can also check now.")), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
+            description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("li", null, "ESGST checks GitHub for new versions every 7 days by default. You can also Check for Updates.")), _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
               className: "esgst-button-group"
             }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("div", {
               id: "manualCheck",
-              className: "esgst-button form__saving-button",
+              className: "esgst-button form__saving-button btn_action white",
               style: {
                 cursor: 'pointer'
               }
             }, _class_DOM__WEBPACK_IMPORTED_MODULE_14__["DOM"].element("i", {
               className: "fa fa-check-circle"
-            }), " Check now"))),
+            }), " Check for Updates"))),
             name: 'Notify when a new ESGST version is available.',
             extensionOnly: true,
             sg: true,
@@ -16285,19 +16285,26 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
     _browser__WEBPACK_IMPORTED_MODULE_13__["browser"].runtime.sendMessage({
       action: 'pendingUpdateCheck'
     }).catch(() => {});
-    document.body.addEventListener('click', async event => {
-      const button = event.target.closest('#manualCheck');
-      if (!button) return;
-      const originalHtml = button.innerHTML;
-      button.innerHTML = '<i class="fa fa-circle-o-notch fa-spin"></i> Checking...';
-      button.disabled = true;
+    document.body.addEventListener('click', async e => {
+      var _targetElement$textCo;
+      const btn = e.target.closest('.nav__row, .dropdown_btn, #manualCheck');
+      if (!btn) return;
+      const targetElement = (btn === null || btn === void 0 ? void 0 : btn.querySelector('.nav__row__summary__name, span')) || btn;
+      const label = targetElement === null || targetElement === void 0 || (_targetElement$textCo = targetElement.textContent) === null || _targetElement$textCo === void 0 ? void 0 : _targetElement$textCo.trim();
+      if (label !== 'Check for Updates') return;
+      const originalHTML = btn.innerHTML;
+      btn.innerHTML = `<i class="fa fa-circle-o-notch fa-spin"></i> Checking...`;
+      btn.disabled = true;
       try {
         await _browser__WEBPACK_IMPORTED_MODULE_13__["browser"].runtime.sendMessage({
           action: 'manualCheckVersion'
         });
+        console.log('Manual update check triggered');
+      } catch (err) {
+        console.error('Failed to trigger manual update check', err);
       } finally {
-        button.innerHTML = originalHtml;
-        button.disabled = false;
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
       }
     });
   }
@@ -20044,6 +20051,9 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
     if (!_class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].header) {
       return;
     }
+    const browserInfo = await this.getBrowserInfo().catch(() => ({
+      name: '?'
+    }));
     _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].header.addButtonContainer({
       buttonImage: _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.icon,
       buttonName: ' ESGST',
@@ -20095,10 +20105,14 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
         icon: 'fa fa-fw fa-history icon-grey grey',
         name: 'SteamGifts Request Log',
         onClick: this.openRequestLog.bind(this)
-      }, {
+      }, ...(browserInfo.name !== 'userscript' ? [{
+        description: `Current Version: ${_class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.versionName}`,
+        icon: 'fa fa-fw fa-info-circle icon-grey grey',
+        name: 'Check for Updates'
+      }] : [{
         icon: 'fa fa-fw fa-info-circle icon-grey grey',
         name: `Current Version: ${_class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.versionName}`
-      }],
+      }])],
       onClick: event => {
         if (!_class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get('openSettingsInTab')) {
           event.preventDefault();
