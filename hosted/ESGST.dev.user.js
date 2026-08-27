@@ -4,7 +4,7 @@
 // @namespace https://SquishedPotatoe.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
-// @version 8.12.2
+// @version 8.12.3
 // @author rafaelgomesxyz
 // @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
@@ -25,8 +25,6 @@
 // @connect isthereanydeal.com
 // @connect esgst.rafaelgomes.xyz
 // @connect raw.githubusercontent.com
-// @connect script.google.com
-// @connect script.googleusercontent.com
 // @connect steam-tracker.com
 // @connect steamcommunity.com
 // @connect store.steampowered.com
@@ -39,6 +37,7 @@
 // @grant GM_setValue
 // @grant GM_xmlhttpRequest
 // @grant GM_openInTab
+// @grant GM_cookie
 // @grant GM_getResourceURL
 // @grant GM.addValueChangeListener
 // @grant GM.deleteValue
@@ -48,6 +47,7 @@
 // @grant GM.setValue
 // @grant GM.xmlHttpRequest
 // @grant GM.openInTab
+// @grant GM.cookie
 // @grant GM.getResourceUrl
 // @require https://greasemonkey.github.io/gm4-polyfill/gm4-polyfill.js
 // @require https://cdn.jsdelivr.net/npm/interactjs@1.10.27/dist/interact.min.js
@@ -6592,14 +6592,19 @@ const browser = {
             {
               var _obj$timeout;
               const parameters = JSON.parse(obj.parameters);
+              if ((!parameters.method || parameters.method.toUpperCase() === 'GET') && parameters.headers) {
+                delete parameters.headers['Content-Type'];
+                delete parameters.headers['content-type'];
+              }
               if (parameters.credentials === 'omit') {
                 parameters.headers['Esgst-Cookie'] = '';
               }
-              browser.gm.xmlHttpRequest({
+              const request = {
+                anonymous: false,
                 binary: !!obj.fileName,
                 data: obj.fileName ? await _class_Shared__WEBPACK_IMPORTED_MODULE_4__["Shared"].common.getZip(parameters.body, obj.fileName, 'binarystring') : parameters.body,
                 headers: parameters.headers,
-                method: parameters.method,
+                method: parameters.method || 'GET',
                 overrideMimeType: obj.blob ? `text/plain; charset=x-user-defined` : '',
                 timeout: (_obj$timeout = obj.timeout) !== null && _obj$timeout !== void 0 ? _obj$timeout : 10000,
                 url: obj.url,
@@ -6617,7 +6622,82 @@ const browser = {
                 onerror: response => resolve({
                   error: response.responseText
                 })
-              });
+              };
+              if (obj.loggedOut) {
+                var _browser$gm$cookie;
+                if (!((_browser$gm$cookie = browser.gm.cookie) !== null && _browser$gm$cookie !== void 0 && _browser$gm$cookie.list)) {
+                  resolve({
+                    error: 'Logged-out requests require GM.cookie support.'
+                  });
+                  break;
+                }
+                try {
+                  const [standardCookies, partitionedCookies] = await Promise.all([browser.gm.cookie.list({
+                    url: obj.url
+                  }), browser.gm.cookie.list({
+                    url: obj.url,
+                    partitionKey: {}
+                  }).catch(() => [])]);
+                  const cookieMap = new Map();
+                  for (const item of [...standardCookies, ...partitionedCookies]) {
+                    var _item$partitionKey;
+                    const key = [item.name, item.domain, item.path, ((_item$partitionKey = item.partitionKey) === null || _item$partitionKey === void 0 ? void 0 : _item$partitionKey.topLevelSite) || ''].join('|');
+                    cookieMap.set(key, item);
+                  }
+                  const cookies = Array.from(cookieMap.values());
+                  const nonSessionCookies = cookies.filter(item => item.name !== 'PHPSESSID');
+                  if (browser.gm.info.scriptHandler === 'Violentmonkey') {
+                    const phpCookies = cookies.filter(item => item.name === 'PHPSESSID');
+                    for (const c of phpCookies) {
+                      await browser.gm.cookie.set({
+                        url: obj.url,
+                        name: 'PHPSESSID',
+                        value: 'invalid_session_id',
+                        domain: c.domain,
+                        path: c.path,
+                        secure: c.secure,
+                        httpOnly: c.httpOnly
+                      });
+                    }
+                    const restoreCookies = async () => {
+                      for (const c of phpCookies) {
+                        await browser.gm.cookie.set({
+                          url: obj.url,
+                          name: c.name,
+                          value: c.value,
+                          domain: c.domain,
+                          path: c.path,
+                          secure: c.secure,
+                          httpOnly: c.httpOnly,
+                          expirationDate: c.expirationDate
+                        });
+                      }
+                    };
+                    const vmRequest = {
+                      ...request,
+                      onload: async response => {
+                        await restoreCookies();
+                        request.onload(response);
+                      },
+                      onerror: async response => {
+                        await restoreCookies();
+                        request.onerror(response);
+                      }
+                    };
+                    browser.gm.xmlHttpRequest(vmRequest);
+                    break;
+                  } else {
+                    const cookieString = nonSessionCookies.map(item => `${item.name}=${item.value}`).join('; ');
+                    request.cookie = ['PHPSESSID=', cookieString].filter(Boolean).join('; ');
+                  }
+                } catch (error) {
+                  resolve({
+                    error: (error === null || error === void 0 ? void 0 : error.message) || String(error)
+                  });
+                  break;
+                }
+              }
+              browser.gm.xmlHttpRequest(request);
               break;
             }
           case 'open_tab':
@@ -9349,17 +9429,8 @@ class _Settings {
         label: `https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/91/91b23515a62b46eaa46cedab5bbe8085aa11ce1d_full.jpg`,
         url: `https://www.playingappreciated.com/profile.php?u=%steamid%`
       }, {
-        label: `https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/0a/0a603fdbfb5d1283132c6558390ef71c1f48fc51_full.jpg`,
-        url: `https://touhou.justarchi.net/user/%steamid%/profile`
-      }, {
-        label: `https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/1a/1ad341114c26138740b405595f9ecf140f6b647f_full.jpg`,
-        url: `https://astats.astats.nl/astats/User_Info.php?steamID64=%steamid%`
-      }, {
         label: `https://steamcdn-a.akamaihd.net/steamcommunity/public/images/avatars/41/41d0a0ca20c6b460c10e03c6ff8ef23bc6bb7f9d_full.jpg`,
         url: `https://barter.vg/steam/%steamid%`
-      }, {
-        label: 'SteamRep',
-        url: `https://steamrep.com/profiles/%steamid%`
       }],
       cgb_b_bgColor: '#f2d9dc',
       cgb_p_bgColor: '#f2e6dc',
@@ -9648,9 +9719,9 @@ class _Settings {
       hgm_removeTagged: false,
       hgm_tags: [],
       hgm_removeBanned: false,
-      giveawayColumns: ['ged', 'endTime', 'winners', 'startTime', 'touhou', 'inviteOnly', 'whitelist', 'group', 'regionRestricted', 'level'],
+      giveawayColumns: ['ged', 'endTime', 'winners', 'startTime', 'inviteOnly', 'whitelist', 'group', 'regionRestricted', 'level'],
       giveawayPanel: ['ttec', 'gwc', 'gwr', 'gptw', 'gp', 'elgb', 'sgTools'],
-      giveawayColumns_gv: ['sgTools', 'ged', 'time', 'touhou', 'inviteOnly', 'whitelist', 'group', 'regionRestricted', 'level'],
+      giveawayColumns_gv: ['sgTools', 'ged', 'time', 'inviteOnly', 'whitelist', 'group', 'regionRestricted', 'level'],
       giveawayPanel_gv: ['ttec', 'gwc', 'gwr', 'gptw', 'gp', 'elgb'],
       enableByDefault_sg: false,
       enableByDefault_st: false,
@@ -19120,6 +19191,80 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
       if (entered) {
         attributes['data-entered'] = true;
       }
+      const hasDescription = !sgTools && Boolean(context.querySelector('.page__description'));
+      const quickEntryChildren = [];
+      if (hasDescription) {
+        quickEntryChildren.push({
+          attributes: {
+            class: 'giveaway__quick-entry-btn giveaway__quick-entry-btn--description',
+            'data-code': code,
+            'data-ui-tooltip': '{"rows":[{"icon":[{"class":"fa-align-left","color":"var(--color-blue-3)"}],"columns":[{"name":"View Description"}]}]}'
+          },
+          type: 'div',
+          children: [{
+            attributes: {
+              class: 'fa fa-align-left'
+            },
+            type: 'i'
+          }]
+        });
+      }
+      if (!sgTools) {
+        quickEntryChildren.push({
+          attributes: {
+            class: 'giveaway__quick-entry-form'
+          },
+          type: 'form',
+          children: [{
+            attributes: {
+              name: 'xsrf_token',
+              type: 'hidden',
+              value: _class_Session__WEBPACK_IMPORTED_MODULE_25__["Session"].xsrfToken
+            },
+            type: 'input'
+          }, {
+            attributes: {
+              name: 'do',
+              type: 'hidden',
+              value: ''
+            },
+            type: 'input'
+          }, {
+            attributes: {
+              name: 'code',
+              type: 'hidden',
+              value: code
+            },
+            type: 'input'
+          }, {
+            attributes: {
+              class: `giveaway__quick-entry-btn giveaway__quick-entry-btn--insert ${hasDescription ? 'is-locked' : ''}`.trim(),
+              'data-do': 'entry_insert',
+              'data-ui-tooltip': '{"rows":[{"icon":[{"class":"fa-plus-circle","color":"var(--color-green-3)"}],"columns":[{"name":"Enter Giveaway"}]}]}'
+            },
+            type: 'div',
+            children: [{
+              attributes: {
+                class: 'fa fa-plus-circle'
+              },
+              type: 'i'
+            }]
+          }, {
+            attributes: {
+              class: 'giveaway__quick-entry-btn giveaway__quick-entry-btn--delete',
+              'data-do': 'entry_delete',
+              'data-ui-tooltip': '{"rows":[{"icon":[{"class":"fa-minus-circle","color":"var(--color-yellow-3)"}],"columns":[{"name":"Remove Entry"}]}]}'
+            },
+            type: 'div',
+            children: [{
+              attributes: {
+                class: 'fa fa-minus-circle'
+              },
+              type: 'i'
+            }]
+          }]
+        });
+      }
       heading.className = 'giveaway__heading';
       columns.className = 'giveaway__columns';
       return {
@@ -19131,7 +19276,7 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
             type: 'div',
             children: [{
               attributes: {
-                class: `giveaway__row-inner-wrap ${entered}`
+                class: `giveaway__row-inner-wrap ${entered} ${hasDescription ? 'has-description' : ''}`.trim()
               },
               type: 'div',
               children: [{
@@ -19178,7 +19323,13 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
                   }]
                 }],
                 type: 'div'
-              }, {
+              }, ...(quickEntryChildren.length > 0 ? [{
+                attributes: {
+                  class: 'giveaway__quick-entry-wrap'
+                },
+                type: 'div',
+                children: quickEntryChildren
+              }] : []), {
                 context: avatar
               }, {
                 attributes: {
@@ -25613,6 +25764,8 @@ class FetchRequest {
     }
     let response = null;
     let lock = null;
+    let loggedOutRequestId = null;
+    const isUserscript = (await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.getBrowserInfo()).name === 'userscript';
     url = url.replace(/^\//, `https://${window.location.hostname}/`).replace(/^https?:/, _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.locationHref.match(/^http:/) ? 'http:' : 'https:');
     if (options.pathParams) {
       url = FetchRequest.addPathParams(url, options.pathParams);
@@ -25644,8 +25797,32 @@ class FetchRequest {
       if (lock) {
         await lock.lock();
       }
-      if (isInternal) {
+      if (options.loggedOut && !isUserscript) {
+        var _res;
+        if (!isInternal) {
+          throw new Error('Logged-out requests are only supported for the current site');
+        }
+        let res = await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+          action: 'start_logged_out_fetch',
+          url
+        });
+        if (typeof res === 'string') {
+          try {
+            res = JSON.parse(res);
+          } catch (e) {}
+        }
+        if (!((_res = res) !== null && _res !== void 0 && _res.success) || !Number.isInteger(res.requestId)) {
+          var _res2;
+          throw new Error(`Could not start logged-out request: ${((_res2 = res) === null || _res2 === void 0 ? void 0 : _res2.error) || 'unknown error'}`);
+        }
+        loggedOutRequestId = res.requestId;
+      }
+      if (isInternal && !(isUserscript && options.loggedOut)) {
         response = await FetchRequest.sendInternal(url, options);
+      } else {
+        response = await FetchRequest.sendExternal(url, options);
+      }
+      if (isInternal) {
         _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.requestLog.unshift({
           url,
           timestamp: Date.now()
@@ -25657,8 +25834,6 @@ class FetchRequest {
           });
         }
         await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.setValue('requestLog', JSON.stringify(_Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.requestLog));
-      } else {
-        response = await FetchRequest.sendExternal(url, options);
       }
       if (lock) {
         await lock.unlock();
@@ -25682,6 +25857,13 @@ class FetchRequest {
         await lock.unlock();
       }
       throw err;
+    } finally {
+      if (loggedOutRequestId !== null) {
+        await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+          action: 'end_logged_out_fetch',
+          requestId: loggedOutRequestId
+        }).catch(() => {});
+      }
     }
   }
   static async sendInternal(url, options) {
@@ -25714,6 +25896,7 @@ class FetchRequest {
       action: 'fetch',
       blob: options.blob,
       fileName: options.fileName,
+      loggedOut: options.loggedOut,
       manipulateCookies,
       parameters: JSON.stringify(FetchRequest.getFetchOptions(options, manipulateCookies)),
       timeout: options.timeout,
@@ -30009,7 +30192,6 @@ class SettingsModule {
         endTime: 'End Time',
         winners: 'Winners',
         startTime: 'Start Time',
-        touhou: 'Touhou',
         inviteOnly: 'Invite Only',
         whitelist: 'Whitelist',
         group: 'Group',
@@ -30026,7 +30208,6 @@ class SettingsModule {
         sgTools: 'SGTools',
         ged: 'Giveaway Encrypter/Decrypter',
         time: 'End/Start Time',
-        touhou: 'Touhou',
         inviteOnly: 'Invite Only',
         whitelist: 'Whitelist',
         group: 'Group',
@@ -40251,14 +40432,16 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(208);
 /* harmony import */ var _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(210);
 /* harmony import */ var _class_Module__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(222);
-/* harmony import */ var _Common__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(146);
+/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(99);
+/* harmony import */ var _Common__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(146);
 
 
 
 
 
-const createElements = _Common__WEBPACK_IMPORTED_MODULE_4__["common"].createElements.bind(_Common__WEBPACK_IMPORTED_MODULE_4__["common"]),
-  getElements = _Common__WEBPACK_IMPORTED_MODULE_4__["common"].getElements.bind(_Common__WEBPACK_IMPORTED_MODULE_4__["common"]);
+
+const createElements = _Common__WEBPACK_IMPORTED_MODULE_5__["common"].createElements.bind(_Common__WEBPACK_IMPORTED_MODULE_5__["common"]),
+  getElements = _Common__WEBPACK_IMPORTED_MODULE_5__["common"].getElements.bind(_Common__WEBPACK_IMPORTED_MODULE_5__["common"]);
 class GiveawaysBlacklistGiveawayLoader extends _class_Module__WEBPACK_IMPORTED_MODULE_3__["Module"] {
   constructor() {
     super();
@@ -40267,8 +40450,67 @@ class GiveawaysBlacklistGiveawayLoader extends _class_Module__WEBPACK_IMPORTED_M
       id: 'bgl',
       name: 'Blacklist Giveaway Loader',
       sg: true,
-      type: 'giveaways'
+      type: 'giveaways',
+      featureMap: {
+        giveaway: this.bgl_getGiveaways.bind(this)
+      }
     };
+  }
+  bgl_getGiveaways(giveaways) {
+    giveaways.forEach(giveaway => {
+      var _giveaway$outerWrap, _giveaway$quickEntryW, _giveaway$outerWrap2;
+      if (!giveaway.blacklist && !((_giveaway$outerWrap = giveaway.outerWrap) !== null && _giveaway$outerWrap !== void 0 && _giveaway$outerWrap.getAttribute('data-blacklist'))) return;
+      const descriptionButton = ((_giveaway$quickEntryW = giveaway.quickEntryWrap) === null || _giveaway$quickEntryW === void 0 ? void 0 : _giveaway$quickEntryW.querySelector('.giveaway__quick-entry-btn--description')) || ((_giveaway$outerWrap2 = giveaway.outerWrap) === null || _giveaway$outerWrap2 === void 0 ? void 0 : _giveaway$outerWrap2.querySelector('.giveaway__quick-entry-btn--description'));
+      if (!descriptionButton || descriptionButton.classList.contains('esgst-bgl-handled')) return;
+      descriptionButton.classList.add('esgst-bgl-handled');
+      descriptionButton.addEventListener('click', async e => {
+        var _giveaway$outerWrap$c;
+        e.stopPropagation();
+        const existingPanel = giveaway.outerWrap.querySelector('.giveaway__description-panel') || ((_giveaway$outerWrap$c = giveaway.outerWrap.closest('.esgst-gv-container')) === null || _giveaway$outerWrap$c === void 0 ? void 0 : _giveaway$outerWrap$c.querySelector('.giveaway__description-panel'));
+        if (giveaway.bglDescriptionLoaded) {
+          if (!_class_Settings__WEBPACK_IMPORTED_MODULE_4__["Settings"].get('gv') && existingPanel) {
+            existingPanel.classList.toggle('esgst-hidden');
+          }
+          return;
+        }
+        if (giveaway.bglLoadingDescription) return;
+        giveaway.bglLoadingDescription = true;
+        const icon = descriptionButton.querySelector('i');
+        if (icon) {
+          icon.className = 'fa fa-circle-o-notch fa-spin';
+        }
+        let responseHtml = null;
+        try {
+          const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].get(giveaway.url || `/giveaway/${giveaway.code}/`, {
+            loggedOut: true
+          });
+          responseHtml = response.html;
+        } catch (_unused) {}
+        if (icon) {
+          icon.className = 'fa fa-align-left';
+        }
+        giveaway.bglLoadingDescription = false;
+        giveaway.bglDescriptionLoaded = true;
+        if (!responseHtml) return;
+        const description = responseHtml.querySelector('.page__description');
+        if (description) {
+          _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].insert(giveaway.outerWrap, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("div", {
+            className: "giveaway__description-panel"
+          }, description));
+        } else {
+          const summary = responseHtml.querySelector('.table--summary');
+          const errorMsg = summary ? summary.textContent.trim() : 'This is a group/whitelist giveaway and therefore cannot be loaded by Blacklist Giveaway Loader.';
+          _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].insert(giveaway.outerWrap, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("div", {
+            className: "giveaway__description-panel"
+          }, _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("div", {
+            className: "esgst-red esgst-bold",
+            style: {
+              padding: '10px'
+            }
+          }, errorMsg)));
+        }
+      });
+    });
   }
   async init() {
     if (!this.esgst.giveawayPath) return;
@@ -40291,9 +40533,17 @@ class GiveawaysBlacklistGiveawayLoader extends _class_Module__WEBPACK_IMPORTED_M
       text: 'Loading giveaway...',
       type: 'span'
     }]);
-    let responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].get(window.location.pathname, {
-      anon: true
-    })).html;
+    let responseHtml;
+    try {
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].get(window.location.pathname, {
+        loggedOut: true
+      });
+      responseHtml = response.html;
+    } catch (_unused2) {}
+    if (!responseHtml) {
+      createElements(this.esgst.pageOuterWrap, 'atinner', backup);
+      return;
+    }
     if (responseHtml.getElementsByClassName('table--summary')[0]) {
       createElements(this.esgst.pageOuterWrap, 'atinner', backup);
       createElements(this.esgst.pageOuterWrap.getElementsByClassName('table--summary')[0].lastElementChild.firstElementChild.lastElementChild, 'beforeend', [{
@@ -41266,6 +41516,9 @@ class GiveawaysFollowedGamesPage extends _class_Module__WEBPACK_IMPORTED_MODULE_
       url: _class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].esgst.searchUrl
     };
     if (!obj.container) return;
+    if (_class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].esgst.pinnedGiveaways) {
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].common.endless_load(_class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].esgst.pinnedGiveaways, true);
+    }
     if (_class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].esgst.es) {
       _class_Shared__WEBPACK_IMPORTED_MODULE_5__["Shared"].esgst.es.paused = true;
       const buttonIds = ['esgst-esPause', 'esgst-esResume', 'esgst-esContinuous', 'esgst-esNext', 'esgst-esRefresh', 'esgst-esRefreshAll'];
@@ -45997,21 +46250,30 @@ class GiveawaysGiveawayBookmarks extends _class_Module__WEBPACK_IMPORTED_MODULE_
       let element = gb.popup.scrollable.children[i].firstElementChild;
       if (!element.getAttribute('data-esgst')) {
         let code = element.textContent;
-        element.textContent = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_5__["FetchRequest"].get(element.getAttribute('href'), {
-          queue: true
-        })).html.getElementsByClassName('featured__heading__medium')[0].textContent;
-        giveaways[code] = {
-          name: element.textContent
-        };
+        if (code) {
+          var _await$FetchRequest$g;
+          const name = (_await$FetchRequest$g = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_5__["FetchRequest"].get(element.getAttribute('href'), {
+            queue: true
+          })).html) === null || _await$FetchRequest$g === void 0 || (_await$FetchRequest$g = _await$FetchRequest$g.getElementsByClassName('featured__heading__medium')[0]) === null || _await$FetchRequest$g === void 0 || (_await$FetchRequest$g = _await$FetchRequest$g.textContent) === null || _await$FetchRequest$g === void 0 ? void 0 : _await$FetchRequest$g.trim();
+          element.setAttribute('data-esgst', 'true');
+          if (name) {
+            element.textContent = name;
+            giveaways[code] = {
+              name
+            };
+          }
+        }
       }
     }
-    lockAndSaveGiveaways(giveaways);
+    if (Object.keys(giveaways).length > 0) {
+      await lockAndSaveGiveaways(giveaways);
+    }
   }
   async gb_loadGiveaways(i, n, bookmarked, gbGiveaways, info, popup, callback) {
     if (i < n) {
       if (bookmarked[i]) {
         let response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_5__["FetchRequest"].get(`/giveaway/${bookmarked[i].code}/`, {
-          queue: true
+          doNotQueue: true
         });
         let endTime;
         let responseHtml = response.html;
@@ -50714,207 +50976,213 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
     const startTime = new Date(sg.created_at).getTime();
     const endTime = new Date(sg.ends_at).getTime();
     if (Number.isNaN(startTime) || Number.isNaN(endTime)) return null;
+    const now = Date.now();
     const copies = Number(sg.copies) || 1;
     const points = Number(sg.points) || 0;
     const steamUrl = sg.steam_url || '';
     const gameId = (_steamUrl$match = steamUrl.match(/store\.steampowered\.com\/(?:app|sub|bundle)\/(\d+)/)) === null || _steamUrl$match === void 0 ? void 0 : _steamUrl$match[1];
-    const ended = endTime < Date.now();
+    const ended = now > endTime;
     const creator = data.creator || {};
     const creatorName = creator.sg_name || creator.persona_name || 'unknown';
     const creatorUrl = creator.sg_name ? `/user/${encodeURIComponent(creator.sg_name)}` : url;
     const attributes = {
       class: 'giveaway__row-outer-wrap'
     };
-    if (gameId) attributes['data-game-id'] = gameId;
+    if (gameId) {
+      attributes['data-game-id'] = gameId;
+    }
     return {
       code,
       html: [{
-        attributes,
         type: 'div',
         children: [{
-          attributes: {
-            class: 'giveaway__row-inner-wrap'
-          },
+          attributes,
           type: 'div',
           children: [{
             attributes: {
-              class: 'giveaway__summary'
+              class: 'giveaway__row-inner-wrap'
             },
             type: 'div',
             children: [{
               attributes: {
-                class: 'giveaway__heading'
-              },
-              type: 'h2',
-              children: [{
-                attributes: {
-                  class: 'giveaway__heading__name',
-                  href: url,
-                  'data-draggable-id': 'name'
-                },
-                text: sg.name,
-                type: 'a'
-              }, ...(copies > 1 ? [{
-                attributes: {
-                  class: 'giveaway__heading__thin',
-                  'data-draggable-id': 'copies'
-                },
-                text: ` (${copies} Copies)`,
-                type: 'span'
-              }] : []), {
-                attributes: {
-                  class: 'giveaway__heading__thin',
-                  'data-draggable-id': 'points'
-                },
-                text: ` (${points}P)`,
-                type: 'span'
-              }, ...(steamUrl ? [{
-                attributes: {
-                  class: 'giveaway__icon',
-                  href: steamUrl,
-                  rel: 'nofollow noopener',
-                  target: '_blank',
-                  'data-draggable-id': 'steam'
-                },
-                type: 'a',
-                children: [{
-                  attributes: {
-                    class: 'fa fa-fw fa-steam'
-                  },
-                  type: 'i'
-                }]
-              }] : []), ...(gameId ? [{
-                attributes: {
-                  class: 'giveaway__icon',
-                  href: `/giveaways/search?app=${gameId}`,
-                  title: `Free Steam Giveaways and Keys for ${sg.name}`,
-                  ['data-draggable-id']: 'search'
-                },
-                type: 'a',
-                children: [{
-                  attributes: {
-                    class: 'fa fa-fw fa-search'
-                  },
-                  type: 'i'
-                }]
-              }, {
-                attributes: {
-                  class: 'fa fa-eye-slash giveaway__hide giveaway__icon',
-                  title: 'Hide all giveaways for this game',
-                  ['data-draggable-id']: 'hideGame'
-                },
-                type: 'i'
-              }] : [])]
-            }, {
-              attributes: {
-                class: 'giveaway__columns'
+                class: 'giveaway__summary'
               },
               type: 'div',
               children: [{
                 attributes: {
-                  'data-draggable-id': 'endTime'
+                  class: 'giveaway__heading'
                 },
-                type: 'div',
+                type: 'h2',
                 children: [{
                   attributes: {
-                    class: 'fa fa-clock-o'
+                    class: 'giveaway__heading__name',
+                    href: url,
+                    ['data-draggable-id']: 'name'
                   },
-                  type: 'i'
-                }, {
-                  attributes: {
-                    'data-timestamp': endTime / 1000
-                  },
-                  text: ended ? `Ended ${_Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(endTime)} ago` : _Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(endTime, true),
-                  type: 'span'
-                }, ...(ended ? [] : [{
-                  text: ' remaining',
-                  type: 'node'
-                }])]
-              }, {
-                attributes: {
-                  class: 'giveaway__column--width-fill text-right',
-                  'data-draggable-id': 'startTime'
-                },
-                type: 'div',
-                children: [{
-                  attributes: {
-                    'data-timestamp': startTime / 1000
-                  },
-                  text: _Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(startTime),
-                  type: 'span'
-                }, {
-                  text: ' ago by ',
-                  type: 'node'
-                }, {
-                  attributes: {
-                    class: 'giveaway__username',
-                    href: creatorUrl
-                  },
-                  text: creatorName,
+                  text: sg.name,
                   type: 'a'
-                }]
-              }]
-            }, {
-              attributes: {
-                class: 'giveaway__links esgst-giveaway-links'
-              },
-              type: 'div',
-              children: [{
-                attributes: {
-                  href: `${url}/entries`,
-                  'data-draggable-id': 'entries'
-                },
-                type: 'a',
-                children: [{
+                }, ...(copies > 1 ? [{
                   attributes: {
-                    class: 'fa fa-tag'
+                    class: 'giveaway__heading__thin',
+                    ['data-draggable-id']: 'copies'
+                  },
+                  text: ` (${copies} Copies)`,
+                  type: 'span'
+                }] : []), {
+                  attributes: {
+                    class: 'giveaway__heading__thin',
+                    ['data-draggable-id']: 'points'
+                  },
+                  text: ` (${points}P)`,
+                  type: 'span'
+                }, ...(steamUrl ? [{
+                  attributes: {
+                    class: 'giveaway__icon',
+                    href: steamUrl,
+                    rel: 'nofollow noopener',
+                    target: '_blank',
+                    ['data-draggable-id']: 'steam'
+                  },
+                  type: 'a',
+                  children: [{
+                    attributes: {
+                      class: 'fa fa-fw fa-steam'
+                    },
+                    type: 'i'
+                  }]
+                }] : []), ...(gameId ? [{
+                  attributes: {
+                    class: 'giveaway__icon',
+                    href: `/giveaways/search?app=${gameId}`,
+                    title: `Free Steam Giveaways and Keys for ${sg.name}`,
+                    ['data-draggable-id']: 'search'
+                  },
+                  type: 'a',
+                  children: [{
+                    attributes: {
+                      class: 'fa fa-fw fa-search'
+                    },
+                    type: 'i'
+                  }]
+                }, {
+                  attributes: {
+                    class: 'fa fa-eye-slash giveaway__hide giveaway__icon',
+                    title: 'Hide all giveaways for this game',
+                    ['data-draggable-id']: 'hideGame'
                   },
                   type: 'i'
+                }] : [])]
+              }, {
+                attributes: {
+                  class: 'giveaway__columns'
+                },
+                type: 'div',
+                children: [{
+                  attributes: {
+                    ['data-draggable-id']: 'endTime'
+                  },
+                  type: 'div',
+                  children: [{
+                    attributes: {
+                      class: 'fa fa-clock-o'
+                    },
+                    type: 'i'
+                  }, {
+                    attributes: {
+                      ['data-timestamp']: endTime / 1000
+                    },
+                    text: ended ? `Ended ${_Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(endTime)} ago` : _Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(endTime, true),
+                    type: 'span'
+                  }, ...(ended ? [] : [{
+                    text: ' remaining',
+                    type: 'node'
+                  }])]
                 }, {
-                  text: '0 entries',
-                  type: 'span'
+                  attributes: {
+                    class: 'giveaway__column--width-fill text-right',
+                    ['data-draggable-id']: 'startTime'
+                  },
+                  type: 'div',
+                  children: [{
+                    attributes: {
+                      ['data-timestamp']: startTime / 1000
+                    },
+                    text: _Common__WEBPACK_IMPORTED_MODULE_26__["common"].getTimeSince(startTime),
+                    type: 'span'
+                  }, {
+                    text: ' ago by ',
+                    type: 'node'
+                  }, {
+                    attributes: {
+                      class: 'giveaway__username',
+                      href: creatorUrl
+                    },
+                    text: creatorName,
+                    type: 'a'
+                  }]
                 }]
               }, {
                 attributes: {
-                  href: `${url}/comments`,
-                  'data-draggable-id': 'comments'
+                  class: 'giveaway__links esgst-giveaway-links'
                 },
-                type: 'a',
+                type: 'div',
                 children: [{
                   attributes: {
-                    class: 'fa fa-comment'
+                    href: `${url}/entries`,
+                    ['data-draggable-id']: 'entries'
                   },
-                  type: 'i'
+                  type: 'a',
+                  children: [{
+                    attributes: {
+                      class: 'fa fa-tag'
+                    },
+                    type: 'i'
+                  }, {
+                    text: '0 entries',
+                    type: 'span'
+                  }]
                 }, {
-                  text: '0 comments',
-                  type: 'span'
+                  attributes: {
+                    href: `${url}/comments`,
+                    ['data-draggable-id']: 'comments'
+                  },
+                  type: 'a',
+                  children: [{
+                    attributes: {
+                      class: 'fa fa-comment'
+                    },
+                    type: 'i'
+                  }, {
+                    text: '0 comments',
+                    type: 'span'
+                  }]
                 }]
+              }, {
+                attributes: {
+                  class: 'giveaway__columns esgst-giveaway-panel'
+                },
+                type: 'div'
               }]
-            }, {
+            }, ...(creator.avatar ? [{
               attributes: {
-                class: 'giveaway__columns esgst-giveaway-panel'
+                class: 'giveaway_image_avatar',
+                href: creatorUrl,
+                style: `background-image: url(${creator.avatar})`
               },
-              type: 'div'
+              type: 'a'
+            }] : []), {
+              attributes: {
+                class: 'giveaway_image_thumbnail',
+                href: url,
+                style: `background-image: url(${sg.img_url || ''})`
+              },
+              type: 'a'
             }]
-          }, ...(creator.avatar ? [{
-            attributes: {
-              class: 'giveaway_image_avatar',
-              href: creatorUrl,
-              style: `background-image: url(${creator.avatar})`
-            },
-            type: 'a'
-          }] : []), {
-            attributes: {
-              class: 'giveaway_image_thumbnail',
-              href: url,
-              style: `background-image: url(${sg.img_url || ''})`
-            },
-            type: 'a'
           }]
         }]
       }],
       points,
-      started: startTime <= Date.now(),
+      started: startTime <= now,
       timestamp: endTime
     };
   }
@@ -50929,235 +51197,216 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
     }
   }
   async ge_extractGiveaway(ge, code, callback, parentEnded = false) {
-    if (!ge.isCanceled) {
-      if (ge.isDivided && ge.count === 50) {
-        let children, filtered, i;
-        ge.mainCallback();
-        ge.mainCallback = null;
-        ge.count = 0;
-        await endless_load(ge.results, false, 'ge', ge.endless);
-        ge.extractButton.build(3);
-        ge.progressBar.setInfo();
-        ge.callback = this.ge_extractGiveaway.bind(this, ge, code, callback);
-        filtered = false;
-        children = ge.results.querySelectorAll(`:scope > .esgst-es-page-${ge.endless}`);
-        for (i = children.length - 1; i > -1 && !filtered; --i) {
-          if (children[i].firstElementChild.classList.contains('esgst-hidden')) {
-            filtered = true;
+    var _ge$failedSgTools;
+    if (ge.isCanceled) return;
+    if (!code || !/^[a-zA-Z0-9-]+$/.test(code)) {
+      callback();
+      return;
+    }
+    if (ge.isDivided && ge.count === 50) {
+      var _ge$mainCallback;
+      (_ge$mainCallback = ge.mainCallback) === null || _ge$mainCallback === void 0 || _ge$mainCallback.call(ge);
+      ge.mainCallback = null;
+      ge.count = 0;
+      await endless_load(ge.results, false, 'ge', ge.endless);
+      ge.extractButton.build(3);
+      ge.progressBar.setInfo();
+      ge.callback = this.ge_extractGiveaway.bind(this, ge, code, callback);
+      const children = ge.results.querySelectorAll(`:scope > .esgst-es-page-${ge.endless}`);
+      let filtered = false;
+      for (let i = children.length - 1; i >= 0 && !filtered; --i) {
+        var _children$i$firstElem;
+        if ((_children$i$firstElem = children[i].firstElementChild) !== null && _children$i$firstElem !== void 0 && _children$i$firstElem.classList.contains('esgst-hidden')) {
+          filtered = true;
+        }
+      }
+      ge.endless++;
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('es') && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('es_ge')) {
+        this.checkScroll(ge, filtered);
+      }
+      return;
+    }
+    if (ge.count === 0 && ge.extracted.length === 0 && (_ge$failedSgTools = ge.failedSgTools) !== null && _ge$failedSgTools !== void 0 && _ge$failedSgTools.length) {
+      ge.failedSgTools = [];
+      if (ge.sgToolsProgressBar) {
+        ge.sgToolsProgressBar.hide();
+        if (ge.sgToolsProgressBar.message) {
+          ge.sgToolsProgressBar.message.innerHTML = '';
+        }
+      }
+    }
+    if (ge.extracted.includes(code)) {
+      callback();
+      return;
+    }
+    let currentCode = code;
+    let sgTools = currentCode.length > 5;
+    let sgToolsData = null;
+    if (sgTools) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt') && (!_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt_l') || ge.sgToolsCount < _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt_limit'))) {
+        _class_Tabs__WEBPACK_IMPORTED_MODULE_19__["Tabs"].open(`https://www.sgtools.info/giveaways/${currentCode}`);
+        ge.cache[ge.cacheId].codes.push(currentCode);
+        ge.extracted.push(currentCode);
+        ge.sgToolsCount += 1;
+        callback();
+        return;
+      }
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgtga')) {
+        try {
+          if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_14__["permissions"].contains([['sgTools', 'cookies']]))) {
+            throw new Error(_class_Permissions__WEBPACK_IMPORTED_MODULE_14__["permissions"].getMessage([['sgTools', 'cookies']]));
           }
+          try {
+            const infoResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.sgtools.info/api/v1/giveaways/${currentCode}`, {
+              headers: {
+                Accept: 'application/json'
+              }
+            });
+            sgToolsData = infoResponse.json || (infoResponse.text ? JSON.parse(infoResponse.text) : null);
+          } catch (_unused) {}
+          if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgtga_u')) {
+            const checkResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].post(`https://www.sgtools.info/api/v1/giveaways/${currentCode}/check`, {
+              queue: true,
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+              },
+              data: JSON.stringify({})
+            });
+            const checkData = checkResponse.json || (checkResponse.text ? JSON.parse(checkResponse.text) : {});
+            if (checkData.success === false) {
+              this.handleSgToolsFailure(ge, currentCode, sgToolsData, checkData);
+              ge.extracted.push(currentCode);
+              callback();
+              return;
+            }
+          }
+          const linkResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].post(`https://www.sgtools.info/api/v1/giveaways/${currentCode}/getLink`, {
+            queue: true,
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            data: JSON.stringify({})
+          });
+          const linkData = linkResponse.json || (linkResponse.text ? JSON.parse(linkResponse.text) : {});
+          if (linkData !== null && linkData !== void 0 && linkData.url) {
+            const match = linkData.url.match(/\/giveaway\/([a-zA-Z0-9]{5})/);
+            if (match) {
+              ge.extracted.push(currentCode);
+              currentCode = match[1];
+              sgTools = false;
+            }
+          }
+        } catch (error) {
+          _class_Logger__WEBPACK_IMPORTED_MODULE_12__["Logger"].warning(error.message, error.stack);
         }
-        ge.endless++;
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('es') && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('es_ge')) {
-          this.checkScroll(ge, filtered);
+      }
+    }
+    if (ge.extracted.includes(currentCode)) {
+      callback();
+      return;
+    }
+    let giveaway = null;
+    let responseHtml = null;
+    try {
+      if (sgTools) {
+        if (!sgToolsData) {
+          const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.sgtools.info/api/v1/giveaways/${currentCode}`, {
+            headers: {
+              Accept: 'application/json'
+            }
+          });
+          sgToolsData = response.json || (response.text ? JSON.parse(response.text) : null);
         }
+        giveaway = this.ge_buildSgToolsGiveaway(sgToolsData, currentCode);
       } else {
-        var _ge$failedSgTools;
-        if (ge.count === 0 && ge.extracted.length === 0 && (_ge$failedSgTools = ge.failedSgTools) !== null && _ge$failedSgTools !== void 0 && _ge$failedSgTools.length) {
-          ge.failedSgTools = [];
-          if (ge.sgToolsProgressBar) {
-            ge.sgToolsProgressBar.hide();
-            if (ge.sgToolsProgressBar.message) {
-              ge.sgToolsProgressBar.message.innerHTML = '';
-            }
-          }
-        }
-        if (ge.extracted.indexOf(code) < 0) {
-          let sgTools = code.length > 5;
-          let sgToolsData = null;
-          if (sgTools) {
-            if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt') && (!_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt_l') || ge.sgToolsCount < _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgt_limit'))) {
-              _class_Tabs__WEBPACK_IMPORTED_MODULE_19__["Tabs"].open(`https://www.sgtools.info/giveaways/${code}`);
-              ge.cache[ge.cacheId].codes.push(code);
-              ge.extracted.push(code);
-              ge.sgToolsCount += 1;
-              callback();
-              return;
-            }
-            if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgtga')) {
-              try {
-                if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_14__["permissions"].contains([['sgTools', 'cookies']]))) {
-                  throw new Error(_class_Permissions__WEBPACK_IMPORTED_MODULE_14__["permissions"].getMessage([['sgTools', 'cookies']]));
-                }
-                try {
-                  const infoResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.sgtools.info/api/v1/giveaways/${code}`, {
-                    headers: {
-                      Accept: 'application/json'
-                    }
-                  });
-                  sgToolsData = infoResponse.json || (infoResponse.text ? JSON.parse(infoResponse.text) : null);
-                } catch (e) {}
-                if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('ge_sgtga_u')) {
-                  const checkResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].post(`https://www.sgtools.info/api/v1/giveaways/${code}/check`, {
-                    queue: true,
-                    headers: {
-                      'Accept': 'application/json',
-                      'Content-Type': 'application/json'
-                    },
-                    data: JSON.stringify({})
-                  });
-                  const checkData = checkResponse.json || (checkResponse.text ? JSON.parse(checkResponse.text) : {});
-                  if (checkData.success === false) {
-                    var _sgToolsData, _ge$popup;
-                    ge.failedSgTools = ge.failedSgTools || [];
-                    const gameName = ((_sgToolsData = sgToolsData) === null || _sgToolsData === void 0 || (_sgToolsData = _sgToolsData.sg) === null || _sgToolsData === void 0 ? void 0 : _sgToolsData.name) || code;
-                    if (!ge.failedSgTools.some(item => item.includes(`/${code}"`))) {
-                      const failureReason = checkData.error ? ` (${checkData.error})` : '';
-                      ge.failedSgTools.push(`<a href="https://www.sgtools.info/giveaways/${code}" target="_blank" rel="noopener noreferrer">${gameName}</a>${failureReason}`);
-                    }
-                    if (!ge.sgToolsProgressBar && (_ge$popup = ge.popup) !== null && _ge$popup !== void 0 && _ge$popup.description) {
-                      var _ge$progressBar;
-                      ge.sgToolsProgressBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_22__["NotificationBar"].create().insert((_ge$progressBar = ge.progressBar) === null || _ge$progressBar === void 0 || (_ge$progressBar = _ge$progressBar.nodes) === null || _ge$progressBar === void 0 ? void 0 : _ge$progressBar.outer, 'afterend').hide();
-                    }
-                    if (ge.sgToolsProgressBar) {
-                      var _ge$sgToolsProgressBa;
-                      ge.sgToolsProgressBar.show().setWarning(`${ge.failedSgTools.length} SGTools giveaway check(s) failed. (Hover to view details)`);
-                      const warningElem = (_ge$sgToolsProgressBa = ge.sgToolsProgressBar.nodes) === null || _ge$sgToolsProgressBa === void 0 ? void 0 : _ge$sgToolsProgressBa.outer;
-                      if (warningElem) {
-                        warningElem.classList.add('esgst-sgtools-bar');
-                        _Common__WEBPACK_IMPORTED_MODULE_26__["common"].createTooltip(warningElem, ge.failedSgTools.join('<br>'));
-                      }
-                    }
-                    ge.extracted.push(code);
-                    callback();
-                    return;
-                  }
-                }
-                const linkResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].post(`https://www.sgtools.info/api/v1/giveaways/${code}/getLink`, {
-                  queue: true,
-                  headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                  },
-                  data: JSON.stringify({})
-                });
-                const linkData = linkResponse.json || (linkResponse.text ? JSON.parse(linkResponse.text) : {});
-                if (linkData && linkData.url) {
-                  const match = linkData.url.match(/\/giveaway\/([a-zA-Z0-9]{5})/);
-                  if (match) {
-                    ge.extracted.push(code);
-                    code = match[1];
-                    sgTools = false;
-                  }
-                }
-              } catch (error) {
-                _class_Logger__WEBPACK_IMPORTED_MODULE_12__["Logger"].warning(error.message, error.stack);
-              }
-            }
-          }
-          if (ge.extracted.indexOf(code) < 0) {
-            let bumpLink, button, giveaway, giveaways, n, responseHtml;
-            try {
-              if (sgTools) {
-                if (!sgToolsData) {
-                  const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.sgtools.info/api/v1/giveaways/${code}`, {
-                    headers: {
-                      Accept: 'application/json'
-                    }
-                  });
-                  sgToolsData = response.json || (response.text ? JSON.parse(response.text) : null);
-                }
-                console.log('[ESGST] SGTools giveaway response', sgToolsData);
-                giveaway = this.ge_buildSgToolsGiveaway(sgToolsData, code);
-                console.log('[ESGST] SGTools giveaway card', giveaway);
-              } else {
-                let response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/giveaway/${code}/`);
-                responseHtml = response.html;
-                button = responseHtml.getElementsByClassName('sidebar__error')[0];
-                giveaway = await buildGiveaway(responseHtml, response.url, button && button.textContent);
-              }
-            } catch (error) {
-              console.error('[ESGST] SGTools giveaway fallback failed', error, error.stack);
-            }
-            if (ge.isCanceled) {
-              return;
-            }
-            if (giveaway) {
-              const isEnded = ge.skipEndedGiveaways && giveaway.timestamp < Date.now();
-              if (!isEnded) {
-                var _responseHtml;
-                createElements(ge.results, 'beforeend', giveaway.html);
-                ge.results.lastElementChild.classList.add(`esgst-es-page-${ge.endless}`);
-                if ((_responseHtml = responseHtml) !== null && _responseHtml !== void 0 && _responseHtml.querySelector('.page__description')) {
-                  var _ge$results$lastEleme;
-                  (_ge$results$lastEleme = ge.results.lastElementChild.querySelector('.giveaway__row-inner-wrap')) === null || _ge$results$lastEleme === void 0 || _ge$results$lastEleme.classList.add('has-description');
-                }
-                giveaway.html = ge.results.lastElementChild.outerHTML;
-                ge.cache[ge.cacheId].codes.push(code);
-                ge.cache[ge.cacheId].giveaways[code] = giveaway;
-                ge.points += giveaway.points;
-                ge.count += 1;
-                ge.total += 1;
-                ge.progressBarCounter.textContent = ge.total;
-              }
-              ge.extracted.push(code);
-              if (sgTools) {
-                callback();
-              } else {
-                if (!ge.bumpLink) {
-                  bumpLink = responseHtml.querySelector(`[href*="/discussion/"]`);
-                  if (bumpLink) {
-                    ge.bumpLink = bumpLink.getAttribute('href');
-                    ge.cache[ge.cacheId].bumpLink = ge.bumpLink;
-                  }
-                }
-                if (isEnded && parentEnded) {
-                  callback();
-                } else {
-                  giveaways = this.ge_getGiveaways(ge, responseHtml);
-                  n = giveaways.length;
-                  if (n > 0) {
-                    window.setTimeout(() => this.ge_extractGiveaways(ge, giveaways, 0, n, callback, isEnded), 0);
-                  } else {
-                    callback();
-                  }
-                }
-              }
-            } else if (!sgTools) {
-              let bumpLink, giveaway, giveaways, n, responseHtml;
-              try {
-                let response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/giveaway/${code}/`, {
-                  anon: true
-                });
-                responseHtml = response.html;
-                giveaway = await buildGiveaway(responseHtml, response.url, null, true);
-              } catch (error) {}
-              if (giveaway) {
-                createElements(ge.results, 'beforeend', giveaway.html);
-                ge.results.lastElementChild.classList.add(`esgst-es-page-${ge.endless}`);
-                giveaway.html = ge.results.lastElementChild.outerHTML;
-                ge.cache[ge.cacheId].codes.push(code);
-                ge.cache[ge.cacheId].giveaways[code] = giveaway;
-                ge.points += giveaway.points;
-                ge.count += 1;
-                ge.total += 1;
-                ge.progressBarCounter.textContent = ge.total;
-                ge.extracted.push(code);
-                if (!ge.bumpLink) {
-                  bumpLink = responseHtml.querySelector(`[href*="/discussion/"]`);
-                  if (bumpLink) {
-                    ge.bumpLink = bumpLink.getAttribute('href');
-                    ge.cache[ge.cacheId].bumpLink = ge.bumpLink;
-                  }
-                }
-                giveaways = this.ge_getGiveaways(ge, responseHtml);
-                n = giveaways.length;
-                if (n > 0) {
-                  window.setTimeout(() => this.ge_extractGiveaways(ge, giveaways, 0, n, callback), 0);
-                } else {
-                  callback();
-                }
-              } else {
-                callback();
-              }
-            } else {
-              callback();
-            }
-          } else {
-            callback();
-          }
-        } else {
-          callback();
-        }
+        const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/giveaway/${currentCode}/`);
+        responseHtml = response.html;
+        const button = responseHtml.getElementsByClassName('sidebar__error')[0];
+        giveaway = await buildGiveaway(responseHtml, response.url, button === null || button === void 0 ? void 0 : button.textContent);
+      }
+    } catch (error) {
+      console.error('[ESGST] SGTools giveaway fetch failed', error);
+    }
+    if (!giveaway && !sgTools) {
+      try {
+        const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/giveaway/${currentCode}/`, {
+          loggedOut: true
+        });
+        responseHtml = response.html;
+        giveaway = await buildGiveaway(responseHtml, response.url, null, true);
+      } catch (err) {
+        console.error('Failed to build giveaway:', err);
+      }
+    }
+    if (ge.isCanceled || !giveaway) {
+      callback();
+      return;
+    }
+    const isEnded = ge.skipEndedGiveaways && giveaway.timestamp < Date.now();
+    if (!isEnded) {
+      var _responseHtml;
+      createElements(ge.results, 'beforeend', giveaway.html);
+      const lastChild = ge.results.lastElementChild;
+      lastChild.classList.add(`esgst-es-page-${ge.endless}`);
+      if ((_responseHtml = responseHtml) !== null && _responseHtml !== void 0 && _responseHtml.querySelector('.page__description')) {
+        var _lastChild$querySelec;
+        (_lastChild$querySelec = lastChild.querySelector('.giveaway__row-inner-wrap')) === null || _lastChild$querySelec === void 0 || _lastChild$querySelec.classList.add('has-description');
+      }
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('gv')) {
+        await endless_load(lastChild, false, 'ge', ge.endless);
+      }
+      giveaway.html = lastChild.outerHTML;
+      ge.cache[ge.cacheId].codes.push(currentCode);
+      ge.cache[ge.cacheId].giveaways[currentCode] = giveaway;
+      ge.points += giveaway.points;
+      ge.count += 1;
+      ge.total += 1;
+      ge.progressBarCounter.textContent = ge.total;
+    }
+    ge.extracted.push(currentCode);
+    if (sgTools) {
+      callback();
+      return;
+    }
+    if (!ge.bumpLink && responseHtml) {
+      const bumpLink = responseHtml.querySelector(`[href*="/discussion/"]`);
+      if (bumpLink) {
+        ge.bumpLink = bumpLink.getAttribute('href');
+        ge.cache[ge.cacheId].bumpLink = ge.bumpLink;
+      }
+    }
+    if (isEnded && parentEnded) {
+      callback();
+      return;
+    }
+    const giveaways = responseHtml ? this.ge_getGiveaways(ge, responseHtml) : [];
+    if (giveaways.length > 0) {
+      window.setTimeout(() => this.ge_extractGiveaways(ge, giveaways, 0, giveaways.length, callback, isEnded), 0);
+    } else {
+      callback();
+    }
+  }
+  handleSgToolsFailure(ge, code, sgToolsData, checkData) {
+    var _sgToolsData$sg, _ge$popup;
+    ge.failedSgTools = ge.failedSgTools || [];
+    const gameName = (sgToolsData === null || sgToolsData === void 0 || (_sgToolsData$sg = sgToolsData.sg) === null || _sgToolsData$sg === void 0 ? void 0 : _sgToolsData$sg.name) || code;
+    if (!ge.failedSgTools.some(item => item.includes(`/${code}"`))) {
+      const failureReason = checkData.error ? ` (${checkData.error})` : '';
+      ge.failedSgTools.push(`<a href="https://www.sgtools.info/giveaways/${code}" target="_blank" rel="noopener noreferrer">${gameName}</a>${failureReason}`);
+    }
+    if (!ge.sgToolsProgressBar && (_ge$popup = ge.popup) !== null && _ge$popup !== void 0 && _ge$popup.description) {
+      var _ge$progressBar;
+      ge.sgToolsProgressBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_22__["NotificationBar"].create().insert((_ge$progressBar = ge.progressBar) === null || _ge$progressBar === void 0 || (_ge$progressBar = _ge$progressBar.nodes) === null || _ge$progressBar === void 0 ? void 0 : _ge$progressBar.outer, 'afterend').hide();
+    }
+    if (ge.sgToolsProgressBar) {
+      var _ge$sgToolsProgressBa;
+      ge.sgToolsProgressBar.show().setWarning(`${ge.failedSgTools.length} SGTools giveaway check(s) failed. (Hover to view details)`);
+      const warningElem = (_ge$sgToolsProgressBa = ge.sgToolsProgressBar.nodes) === null || _ge$sgToolsProgressBa === void 0 ? void 0 : _ge$sgToolsProgressBa.outer;
+      if (warningElem) {
+        warningElem.classList.add('esgst-sgtools-bar');
+        _Common__WEBPACK_IMPORTED_MODULE_26__["common"].createTooltip(warningElem, ge.failedSgTools.join('<br>'));
       }
     }
   }
@@ -51170,7 +51419,7 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
         giveaways.push(match[1]);
       }
     } else if (context === this.esgst.pageOuterWrap && this.esgst.giveawayPath) {
-      let match = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.locationHref.match(/\/giveaway\/(.+?)\//);
+      let match = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.locationHref.match(/\/giveaway\/([a-zA-Z0-9]{5,})\//);
       if (match) {
         giveaways.push(match[1]);
       }
@@ -51251,7 +51500,7 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
   ge_getGiveaway(element, ge, giveaways, next) {
     if (element.matches('img')) {
       const title = element.getAttribute('title');
-      if (title.length === 5) {
+      if (title && /^[a-zA-Z0-9]{5}$/.test(title)) {
         if (ge.extracted.indexOf(title) < 0 && giveaways.indexOf(title) < 0) {
           giveaways.push(title);
         }
@@ -51287,7 +51536,8 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
     const elements = document.querySelectorAll(`.markdown img[title], .markdown [href*="/giveaway/"], .markdown [href*="sgtools.info/giveaways"]`);
     for (const element of elements) {
       if (element.matches('img')) {
-        if (element.getAttribute('title').length === 5) {
+        const title = element.getAttribute('title');
+        if (title && /^[a-zA-Z0-9]{5}$/.test(title)) {
           isFound = true;
         }
       } else {
@@ -51306,7 +51556,9 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
       ge.mainCallback();
       ge.mainCallback = null;
     }
-    await endless_load(ge.results, false, 'ge', ge.endless);
+    if (!_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('gv')) {
+      await endless_load(ge.results, false, 'ge', ge.endless);
+    }
     const items = [{
       attributes: {
         class: 'markdown esgst-text-center'
@@ -60746,7 +60998,7 @@ class GiveawaysGridView extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Modu
 				}
 			`);
       if (this.esgst.groupPath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_grp') || this.esgst.gamePath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_gp') || this.esgst.giveawaysPath || this.esgst.userPath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_pro')) {
-        let button, display, element, popout, spacing, slider;
+        let button, display, element, elements, i, n, popout, spacing, slider;
         button = createHeadingButton({
           id: 'gv',
           icons: ['fa-th-large'],
@@ -60807,11 +61059,15 @@ class GiveawaysGridView extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Modu
     if ((!main || !(this.esgst.groupPath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_grp') || this.esgst.gamePath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_gp') || this.esgst.giveawaysPath || this.esgst.userPath && _class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_pro'))) && (main || (source !== 'gb' || !_class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_gb')) && (source !== 'ged' || !_class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_ged')) && (source !== 'ge' || !_class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('gv_ge')))) return;
     let username, avatar;
     if (this.esgst.userPath && !this.esgst.userWonPath) {
-      avatar = document.getElementsByClassName('global__image-inner-wrap')[0].style.backgroundImage.match(/\("(.+)"\)/)[1];
-      username = document.getElementsByClassName('featured__heading__medium')[0].textContent;
+      var _document$getElements, _document$getElements2;
+      avatar = (_document$getElements = document.getElementsByClassName('global__image-inner-wrap')[0]) === null || _document$getElements === void 0 || (_document$getElements = _document$getElements.style.backgroundImage) === null || _document$getElements === void 0 || (_document$getElements = _document$getElements.match(/\("(.+)"\)/)) === null || _document$getElements === void 0 ? void 0 : _document$getElements[1];
+      username = (_document$getElements2 = document.getElementsByClassName('featured__heading__medium')[0]) === null || _document$getElements2 === void 0 ? void 0 : _document$getElements2.textContent;
     }
     giveaways.forEach(giveaway => {
-      var _ref, _giveaway$endTimeColu, _giveaway$endTimeColu2, _giveaway$endTimeColu3, _ref2, _giveaway$startTimeCo, _giveaway$startTimeCo2, _giveaway$startTimeCo3, _giveaway$endTimeColu4;
+      var _giveaway$innerWrap, _ref, _giveaway$endTimeColu, _giveaway$endTimeColu2, _giveaway$endTimeColu3, _ref2, _giveaway$startTimeCo, _giveaway$startTimeCo2, _giveaway$startTimeCo3, _giveaway$endTimeColu4, _giveaway$endTimeColu5, _giveaway$startTimeCo4, _giveaway$entriesLink, _giveaway$commentsLin;
+      if (giveaway.grid || (_giveaway$innerWrap = giveaway.innerWrap) !== null && _giveaway$innerWrap !== void 0 && _giveaway$innerWrap.classList.contains('esgst-gv-box')) {
+        return;
+      }
       giveaway.grid = true;
       let popup = giveaway.outerWrap.closest('.esgst-popup-scrollable') || _class_Shared__WEBPACK_IMPORTED_MODULE_8__["Shared"].common.isCurrentPath('Account') && this.esgst.parameters.esgst;
       if (popup) {
@@ -60905,7 +61161,7 @@ class GiveawaysGridView extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Modu
       }, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
         className: "esgst-gv-creator"
       }, "by "))));
-      if (this.esgst.userPath && !this.esgst.userWonPath && source !== 'gb') {
+      if (this.esgst.userPath && !this.esgst.userWonPath && source !== 'gb' && username) {
         giveaway.creatorContainer = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
           className: "giveaway__username",
           href: `/user/${username}`
@@ -60926,12 +61182,14 @@ class GiveawaysGridView extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Modu
       if ((_giveaway$endTimeColu4 = giveaway.endTimeColumn) !== null && _giveaway$endTimeColu4 !== void 0 && _giveaway$endTimeColu4.nextElementSibling) {
         temp.after(giveaway.endTimeColumn.nextElementSibling);
       }
-      giveaway.endTimeColumn.classList.add('esgst-hidden');
-      if (giveaway.startTimeColumn) {
-        giveaway.startTimeColumn.classList.add('esgst-hidden');
+      (_giveaway$endTimeColu5 = giveaway.endTimeColumn) === null || _giveaway$endTimeColu5 === void 0 || _giveaway$endTimeColu5.classList.add('esgst-hidden');
+      (_giveaway$startTimeCo4 = giveaway.startTimeColumn) === null || _giveaway$startTimeCo4 === void 0 || _giveaway$startTimeCo4.classList.add('esgst-hidden');
+      if ((_giveaway$entriesLink = giveaway.entriesLink) !== null && _giveaway$entriesLink !== void 0 && _giveaway$entriesLink.lastElementChild) {
+        giveaway.entriesLink.lastElementChild.textContent = giveaway.entriesLink.textContent.replace(/[^\d,]+/g, '');
       }
-      giveaway.entriesLink.lastElementChild.textContent = giveaway.entriesLink.textContent.replace(/[^\d,]+/g, '');
-      giveaway.commentsLink.lastElementChild.textContent = giveaway.commentsLink.textContent.replace(/[^\d,]+/g, '');
+      if ((_giveaway$commentsLin = giveaway.commentsLink) !== null && _giveaway$commentsLin !== void 0 && _giveaway$commentsLin.lastElementChild) {
+        giveaway.commentsLink.lastElementChild.textContent = giveaway.commentsLink.textContent.replace(/[^\d,]+/g, '');
+      }
       if (giveaway.quickEntryWrap && !_class_Settings__WEBPACK_IMPORTED_MODULE_9__["Settings"].get('elgb')) {
         _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(temp, 'afterend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
           className: "esgst-qe-panel"
@@ -67265,7 +67523,6 @@ class GeneralPointsVisualizer extends _class_Module__WEBPACK_IMPORTED_MODULE_0__
   init() {
     _class_EventDispatcher__WEBPACK_IMPORTED_MODULE_2__["EventDispatcher"].subscribe(_constants_Events__WEBPACK_IMPORTED_MODULE_3__["Events"].POINTS_UPDATED, this.pv_setStyle.bind(this));
     this.pv_setStyle(null, _class_Session__WEBPACK_IMPORTED_MODULE_4__["Session"].counters.points);
-    this.esgst.modules.generalLevelProgressVisualizer.joinStyles();
   }
   pv_setStyle(oldPoints, newPoints) {
     const points = Math.min(400, newPoints);
@@ -67333,6 +67590,7 @@ class GeneralPointsVisualizer extends _class_Module__WEBPACK_IMPORTED_MODULE_0__
         values: [`linear-gradient(to right, ${barColorSelected} ${secondBar}, transparent ${secondBar})`, `var(--esgst-lpv-arrow-selected, linear-gradient(#4e525f 0px, #434857 5px, #2b2e3a 100%))`]
       }]
     }];
+    this.esgst.modules.generalLevelProgressVisualizer.joinStyles();
   }
 }
 const generalPointsVisualizer = new GeneralPointsVisualizer();
@@ -70849,6 +71107,9 @@ class GeneralTimeToPointCapCalculator extends _class_Module__WEBPACK_IMPORTED_MO
     const pointsNode = _class_Shared__WEBPACK_IMPORTED_MODULE_6__["Shared"].header.buttonContainers['account'].nodes.points;
     pointsNode.textContent = `${newPoints.toLocaleString('en-US')}${_class_Settings__WEBPACK_IMPORTED_MODULE_2__["Settings"].get('ttpcc_a') ? `P / ${time} to 400` : ''}`;
     pointsNode.title = _Common__WEBPACK_IMPORTED_MODULE_1__["common"].getFeatureTooltip('ttpcc', `${time} to 400P`);
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_2__["Settings"].get('pv') && _class_Settings__WEBPACK_IMPORTED_MODULE_2__["Settings"].get('ttpcc_a')) {
+      this.esgst.modules.generalPointsVisualizer.pv_setStyle(oldPoints, newPoints);
+    }
   }
 }
 const generalTimeToPointCapCalculator = new GeneralTimeToPointCapCalculator();
@@ -77689,6 +77950,18 @@ class GiveawaysEnterLeaveGiveawayButton extends _class_Module__WEBPACK_IMPORTED_
     responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_8__["FetchRequest"].get(giveaway.url, {
       doNotQueue: true
     })).html;
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_15__["Settings"].get('bgl')) {
+      const hasError = [...responseHtml.querySelectorAll('.table__row-inner-wrap')].some(row => {
+        var _row$querySelector;
+        return ((_row$querySelector = row.querySelector('.table__column--width-small')) === null || _row$querySelector === void 0 ? void 0 : _row$querySelector.textContent.trim().toLowerCase()) === 'error';
+      });
+      if (hasError) {
+        responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_8__["FetchRequest"].get(giveaway.url, {
+          doNotQueue: true,
+          loggedOut: true
+        })).html;
+      }
+    }
     if (mainCallback && !responseHtml.getElementsByClassName('featured__outer-wrap--giveaway')[0]) {
       mainCallback(true);
       return;
@@ -77825,8 +78098,8 @@ class GiveawaysEnterLeaveGiveawayButton extends _class_Module__WEBPACK_IMPORTED_
         return;
       }
       const errorRow = [...responseHtml.querySelectorAll('.table__row-inner-wrap')].find(row => {
-        var _row$querySelector;
-        return ((_row$querySelector = row.querySelector('.table__column--width-small')) === null || _row$querySelector === void 0 ? void 0 : _row$querySelector.textContent.trim().toLowerCase()) === 'error';
+        var _row$querySelector2;
+        return ((_row$querySelector2 = row.querySelector('.table__column--width-small')) === null || _row$querySelector2 === void 0 ? void 0 : _row$querySelector2.textContent.trim().toLowerCase()) === 'error';
       });
       const message = errorRow === null || errorRow === void 0 || (_errorRow$querySelect = errorRow.querySelector('.table__column--width-fill')) === null || _errorRow$querySelect === void 0 ? void 0 : _errorRow$querySelect.textContent.trim();
       if (message) {
@@ -78377,8 +78650,19 @@ function initTable(table, esgst) {
   };
   const theadRow = table.querySelector('thead tr');
   if (!theadRow) return;
+  const bodyRows = Array.from(table.querySelectorAll('tbody tr'));
+  const maxCols = Math.max(theadRow.children.length, ...bodyRows.map(tr => tr.children.length));
+  for (const tr of bodyRows) {
+    const missing = maxCols - tr.children.length;
+    if (missing > 0) {
+      tr.append(...Array.from({
+        length: missing
+      }, () => document.createElement('td')));
+    }
+  }
   const header = document.createElement('th');
   header.className = 'esgst-hgitb-col';
+  header.style.textAlign = 'center';
   const control = document.createElement('span');
   control.className = 'esgst-hgitb-header esgst-clickable';
   const text = document.createElement('span');
@@ -78391,7 +78675,7 @@ function initTable(table, esgst) {
   header._iconRef = icon;
   theadRow.appendChild(header);
   state.header = header;
-  state.giveaways = Array.from(table.querySelectorAll('tbody tr')).map(tr => initRow(tr, state)).filter(Boolean);
+  state.giveaways = bodyRows.map(tr => initRow(tr, state)).filter(Boolean);
   updateHeader(state);
   control.addEventListener('click', () => onHeaderClick(state));
   lookupUnknown(state);
@@ -78572,8 +78856,9 @@ function markUnknown(g) {
   updateSortValue(g);
 }
 function getSortValue(g) {
-  if (g.hidden) return 2;
-  if (g.notFound || g.unknown) return 1;
+  if (g.hidden) return 1;
+  if (g.unknown) return 2;
+  if (g.notFound) return 3;
   return 0;
 }
 function updateSortValue(g) {
@@ -80452,11 +80737,10 @@ class Giveaways extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Module"] {
     giveaway.levelColumn = giveaway.outerWrap.querySelector(`.giveaway__column--contributor-level, .featured__column--contributor-level`);
     giveaway.level = giveaway.levelColumn ? parseInt(giveaway.levelColumn.textContent.match(/\d+/)[0]) : 0;
     giveaway.inviteOnly = giveaway.outerWrap.querySelector(`.giveaway__column--invite-only, .featured__column--invite-only`);
-    giveaway.regionRestricted = giveaway.outerWrap.querySelector(`.giveaway__column--region-restricted:not(.touhou_giveaway_points), .featured__column--region-restricted:not(.touhou_giveaway_points)`);
+    giveaway.regionRestricted = giveaway.outerWrap.querySelector(`.giveaway__column--region-restricted, .featured__column--region-restricted`);
     giveaway.group = giveaway.outerWrap.querySelector(`.giveaway__column--group, .featured__column--group`);
     giveaway.whitelist = giveaway.outerWrap.querySelector(`.giveaway__column--whitelist, .featured__column--whitelist`);
     giveaway.public = !giveaway.sgTools && !giveaway.inviteOnly && !giveaway.regionRestricted && !giveaway.group && !giveaway.whitelist;
-    giveaway.touhouBox = giveaway.outerWrap.querySelector('.touhou_giveaway_points');
     if (!main || !giveawayPath) {
       if (giveaway.inviteOnly) {
         createElements(giveaway.inviteOnly, 'atinner', [{
@@ -80639,9 +80923,6 @@ class Giveaways extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Module"] {
     }
     if (giveaway.sourceColumn) {
       giveaway.sourceColumn.setAttribute('data-draggable-id', 'ged');
-    }
-    if (giveaway.touhouBox) {
-      giveaway.touhouBox.setAttribute('data-draggable-id', 'touhou');
     }
     return {
       giveaway: giveaway,
@@ -82321,14 +82602,18 @@ class Games extends _class_Module__WEBPACK_IMPORTED_MODULE_6__["Module"] {
     if (!context) {
       return null;
     }
-    const link = context.querySelector(`[href*="store.steampowered.com/app/"], [href*="store.steampowered.com/sub/"], [href*="store.steampowered.com/bundle/"], [href*="steamcommunity.com/app/"], [href*="steamcommunity.com/sub/"], [href*="steamcommunity.com/bundle/"], [href*="s.team/a/"]`);
+    const steamLinkSelector = `[href*="store.steampowered.com/app/"], [href*="store.steampowered.com/sub/"], [href*="store.steampowered.com/bundle/"], [href*="steamcommunity.com/app/"], [href*="steamcommunity.com/sub/"], [href*="steamcommunity.com/bundle/"], [href*="s.team/a/"]`;
+    const link = context.querySelector(steamLinkSelector);
     if (!link && _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('gc_row')) {
       const fanatical = context.querySelector(`[href*="fanatical.com/"]`);
       if (fanatical) {
         const row = context.closest('tr');
         if (row) {
-          row.style.backgroundColor = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('gc_row_bgColor');
-          row.title = 'ESGST cannot check this game';
+          const steamLink = row.querySelector(steamLinkSelector);
+          if (!steamLink) {
+            row.style.backgroundColor = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('gc_row_bgColor');
+            row.title = 'ESGST cannot check this game';
+          }
         }
       }
     }
@@ -82904,39 +83189,45 @@ class GeneralTableSorter extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Mod
     return ratio >= threshold ? matchedStr : null;
   }
   ts_parseMiscValue(value, element) {
-    let numericMatch = value.match(/^[+-]?\d{1,3}(,\d{3})*(?:\.\d+)?(?!\w)|^[+-]?\d+(\.\d+)?(?!\w)/);
+    const trimmed = value.trim();
+    let percentMatch = trimmed.match(/^([+-]?\d+(?:\.\d+)?)\s*%/);
+    if (percentMatch) {
+      element.value = parseFloat(percentMatch[1]);
+      if (isNaN(element.value)) element.value = 0;
+      return true;
+    }
+    let numericMatch = trimmed.match(/^[+-]?\d{1,3}(?:,\d{3})*(?:\.\d+)?(?!\w)|^[+-]?\d+(?:\.\d+)?(?!\w)/);
     if (numericMatch) {
       element.value = parseFloat(numericMatch[0].replace(/,/g, ''));
       if (isNaN(element.value)) element.value = 0;
       return true;
     }
-    if (/^(from\s*)?[-+]?[A-Z]{0,3}[$€£¥₹]\d[\d,\.]*$/i.test(value)) {
-      let cleaned = value.replace(/^from\s*/i, '').replace(/^[+]/, '').replace(/[A-Z]{0,3}[$€£¥₹]/i, '').replace(/,/g, '').trim();
+    if (/^(from\s*)?[-+]?[A-Z]{0,3}[$€£¥₹]\d[\d,\.]*$/i.test(trimmed)) {
+      let cleaned = trimmed.replace(/^from\s*/i, '').replace(/^[+]/, '').replace(/[A-Z]{0,3}[$€£¥₹]/i, '').replace(/,/g, '').trim();
       element.value = parseFloat(cleaned);
       if (isNaN(element.value)) element.value = 0;
       return true;
     }
-    element.value = value.replace(/[^\x00-\x7F]/gu, '').trimStart() || value;
+    element.value = trimmed.replace(/[^\x00-\x7F]/gu, '').trimStart() || trimmed;
     return false;
   }
   ts_getArray(columnName, i, table) {
-    let array, column, element, j, n, row, rows, value;
-    array = [];
-    rows = table.querySelectorAll(`.table__row-outer-wrap, .row_outer_wrap, tbody tr`);
+    let array = [];
+    let rows = table.querySelectorAll(`.table__row-outer-wrap, .row_outer_wrap, tbody tr`);
     let isNumeric = false;
     const now = Date.now();
-    for (j = 0, n = rows.length; j < n; ++j) {
-      row = rows[j];
-      column = row.querySelectorAll(`.table__column--width-fill, .table__column--width-medium, .table__column--width-small, .column_flex, .column_medium, .column_small, td`)[i];
-      value = column && column.textContent.trim();
+    for (let j = 0, n = rows.length; j < n; ++j) {
+      let row = rows[j];
+      let column = row.querySelectorAll(`.table__column--width-fill, .table__column--width-medium, .table__column--width-small, .column_flex, .column_medium, .column_small, td`)[i];
+      let value = column && column.textContent.trim();
       const hasSortValue = column && column.hasAttribute('data-sort-value');
-      element = {
+      let element = {
         outerWrap: row,
         sortIndex: 0,
         value: undefined
       };
       if (row.hasAttribute('data-sort-index')) {
-        element.sortIndex = parseInt(row.getAttribute('data-sort-index'));
+        element.sortIndex = parseInt(row.getAttribute('data-sort-index'), 10);
       } else {
         element.sortIndex = j;
         row.setAttribute('data-sort-index', j);
@@ -82944,10 +83235,12 @@ class GeneralTableSorter extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Mod
       if (hasSortValue || value && value.length > 0 || columnName === 'Trending') {
         if (hasSortValue) {
           element.value = parseFloat(column.getAttribute('data-sort-value'));
+          isNumeric = true;
         } else {
           switch (columnName) {
             case 'Trending':
               element.value = column.getElementsByClassName('fa-caret-up').length - column.getElementsByClassName('fa-caret-down').length;
+              isNumeric = true;
               break;
             case 'Added':
             case 'Creation Date':
@@ -82958,10 +83251,11 @@ class GeneralTableSorter extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Mod
             case 'Last Post':
             case 'Last Update':
               try {
-                element.value = value.match(/Online|Open/) ? now : parseInt(column.querySelector(`[data-timestamp]`).getAttribute('data-timestamp')) * 1e3;
+                element.value = value.match(/Online|Open/) ? now : parseInt(column.querySelector(`[data-timestamp]`).getAttribute('data-timestamp'), 10) * 1e3;
               } catch (e) {
                 element.value = 0;
               }
+              isNumeric = true;
               break;
             case 'Game':
             case 'Giveaway':
@@ -82975,30 +83269,37 @@ class GeneralTableSorter extends _class_Module__WEBPACK_IMPORTED_MODULE_5__["Mod
               break;
             default:
               {
-                if (!value || value === '―' || value === '-') {
+                if (!value || /^[-―—–]$/.test(value)) {
                   element.value = '';
                 } else {
                   const dateSubstring = this.ts_getDateSubstring(value, dateRegex, 0.7);
+                  let rowIsNumeric = false;
                   if (dateSubstring) {
                     const parsedDate = this.ts_handleDate(dateSubstring);
-                    isNumeric = parsedDate ? (element.value = parsedDate.getTime(), true) : this.ts_parseMiscValue(value, element);
+                    if (parsedDate) {
+                      element.value = parsedDate.getTime();
+                      rowIsNumeric = true;
+                    } else {
+                      rowIsNumeric = this.ts_parseMiscValue(value, element);
+                    }
                   } else {
-                    isNumeric = this.ts_parseMiscValue(value, element);
+                    rowIsNumeric = this.ts_parseMiscValue(value, element);
                   }
+                  isNumeric = isNumeric || rowIsNumeric;
                 }
                 break;
               }
           }
         }
       } else {
-        element.value = 0;
+        element.value = '';
       }
       array.push(element);
     }
     if (isNumeric) {
       for (let i = array.length - 1; i > -1; i--) {
         let element = array[i];
-        if (typeof element.value === 'string') {
+        if (typeof element.value === 'string' || element.value === undefined || element.value === null) {
           element.value = 0;
         }
       }
@@ -87945,7 +88246,7 @@ class UsersUserLinks extends _class_Module__WEBPACK_IMPORTED_MODULE_4__["Module"
     this.info = {
       description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("li", null, "Allows you to add custom links next to a user's username in their profile page."), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("li", null, "Can be used in other pages through ", _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("span", {
         "data-esgst-feature-id": "cl_ui"
-      }), "."), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("li", null, "Comes by default with 5 links to BLAEO, Playing Appreciated, Touhou Giveaways, AStats and SteamRep.")),
+      }), "."), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("li", null, "Comes by default with 4 links to steamtrades, BLAEO, Playing Appreciated, and Barter.vg.")),
       id: 'ul',
       name: 'User Links',
       sg: true,
@@ -96748,9 +97049,17 @@ function addStyle() {
 		filter: grayscale(0);
 	}
 
-	.esgst-button-container {
+	.esgst-button-container, .esgst-ge-sgt-button.esgst-giveaway-column-button {
 		padding: 0;
 		border: none;
+	}
+
+	.esgst-ge-sgt-button .form__submit-button, .esgst-ge-sgt-button .form__submit-button:not(.is-disabled):hover, .esgst-ge-sgt-button .form__submit-button:not(.is-disabled):active {
+		background-image: linear-gradient(#A7D1EE 0%, #8AC4DF 50%, #6AA2C9 100%);
+		border-color: #93BBD3 #699DBC #427BA4 #70ACC8;
+		box-shadow: none;
+		color: inherit;
+		text-shadow: none;
 	}
 
 	.esgst-button-container.esgst-elgb-button {
