@@ -103,7 +103,10 @@ class Giveaways extends Module {
 				key = 'giveaway';
 			}
 		}
-		matches = context.querySelectorAll(query);
+		matches = [
+			...(context.matches?.(query) ? [context] : []),
+			...context.querySelectorAll(query),
+		];
 		for (const match of matches) {
 			giveaway = await this.giveaways_getInfo(
 				match,
@@ -290,7 +293,9 @@ class Giveaways extends Module {
 				giveaway.points = parseInt(thinHeadings[0].textContent.match(/\d+/)[0]);
 			}
 		}
-		giveaway.columns = giveaway.innerWrap.querySelector(`.giveaway__columns, .featured__columns`);
+		giveaway.columns = giveaway.innerWrap.querySelector(
+			'.giveaway__columns:not(.esgst-gv-icons), .featured__columns'
+		);
 		if (giveaway.columns && (!archivePath || !main)) {
 			giveaway.endTimeColumn = giveaway.columns.firstElementChild;
 			if (giveaway.endTimeColumn.classList.contains('esgst-ged-source')) {
@@ -515,7 +520,7 @@ class Giveaways extends Module {
 				);
 			}
 		}
-		if (giveaway.sgTools && !giveaway.panel.getElementsByClassName('esgst-ge-sgt-button')[0]) {
+		if (giveaway.sgTools && !giveaway.outerWrap?.getElementsByClassName('esgst-ge-sgt-button')[0]) {
 			createElements(giveaway.panel, 'beforeend', [
 				{
 					attributes: {
@@ -721,7 +726,10 @@ class Giveaways extends Module {
 			if (child.matches('.giveaway__icon.fa-camera[data-lightbox-id]')) {
 				child.setAttribute('data-draggable-id', 'screenshots-videos');
 			}
-			if (child.getAttribute('href') && child.getAttribute('href').match(/\/giveaways\/search/)) {
+			if (
+				child.getAttribute('href')?.includes('/giveaways/search') ||
+				child.querySelector('.fa-search')
+			) {
 				child.setAttribute('data-draggable-id', 'search');
 			}
 		}
@@ -854,7 +862,9 @@ class Giveaways extends Module {
 					) {
 						element.classList.remove('giveaway__icon');
 					}
-					element.classList.add(this.esgst.giveawayPath ? 'featured__column' : 'giveaway__column');
+					if (!giveaway.gvIcons) {
+						element.classList.add(this.esgst.giveawayPath ? 'featured__column' : 'giveaway__column');
+					}
 					if (element.getAttribute('data-color')) {
 						element.firstElementChild.style.color = element.getAttribute('data-bgColor');
 						element.style.color = '';
