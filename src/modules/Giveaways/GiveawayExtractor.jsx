@@ -493,6 +493,7 @@ class GiveawaysGiveawayExtractor extends Module {
 						ge.bumpLink = '';
 						ge.points = 0;
 						ge.sgToolsCount = 0;
+						ge.callback = null;
 					}
 					ge.flushCache = true;
 					ge.flushCacheHours = 0;
@@ -1067,6 +1068,14 @@ class GiveawaysGiveawayExtractor extends Module {
 			ge.extractButton.build(3);
 			ge.progressBar.setInfo();
 			ge.callback = this.ge_extractGiveaway.bind(this, ge, code, callback);
+
+			const children = ge.results.querySelectorAll(`:scope > .esgst-es-page-${ge.endless}`);
+			for (let i = children.length - 1; i >= 0; --i) {
+				if (children[i].firstElementChild?.classList.contains('esgst-hidden')) {
+					ge.pendingScrollDown = true;
+					break;
+				}
+			}
 
 			ge.endless++;
 			await this.ge_saveCache(ge);
