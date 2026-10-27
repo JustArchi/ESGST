@@ -229,7 +229,14 @@ class Common extends Module {
 				await setSync();
 			} else if (this.esgst.parameters.esgst === 'backup') {
 				this.setSidebarActive('backup');
-				loadDataManagement('export');
+				if (
+					this.esgst.parameters.autoBackupIndex !== undefined &&
+					this.esgst.parameters.autoBackupIndex !== null
+				) {
+					this.runSilentBackup();
+				} else {
+					loadDataManagement('export');
+				}
 			} else if (this.esgst.parameters.esgst === 'restore') {
 				this.setSidebarActive('restore');
 				loadDataManagement('import');
@@ -2003,6 +2010,10 @@ class Common extends Module {
 			await setSync();
 		} else if (!isSyncing || currentDate - isSyncing > 1800000) {
 			let parameters = '';
+			let failedAutoSyncs = {};
+			try {
+				failedAutoSyncs = JSON.parse(LocalStorage.get('failedAutoSyncs', '{}'));
+			} catch (e) {}
 			LocalStorage.set('isSyncing', currentDate);
 			[
 				'Groups',
@@ -2017,9 +2028,13 @@ class Common extends Module {
 				'Giveaways',
 				'WonGiveaways',
 			].forEach((key) => {
+				const interval = Settings.get(`autoSync${key}`);
+				const failedAt = failedAutoSyncs[key];
+				const failedRetryDue = !failedAt || currentDate - failedAt > interval * 86400000;
 				if (
-					Settings.get(`autoSync${key}`) &&
-					currentDate - Settings.get(`lastSync${key}`) > Settings.get(`autoSync${key}`) * 86400000
+					interval &&
+					failedRetryDue &&
+					currentDate - Settings.get(`lastSync${key}`) > interval * 86400000
 				) {
 					parameters += `${key}=1&`;
 				}
@@ -6052,7 +6067,7 @@ class Common extends Module {
 		};
 
 		Shared.esgst.requestLog = Shared.esgst.requestLog.filter(
-			(log) => now - log.timestamp <= 2592000000
+			(log) => now - log.timestamp <= 172800000
 		);
 		for (const log of Shared.esgst.requestLog) {
 			const date = new Date(log.timestamp);
