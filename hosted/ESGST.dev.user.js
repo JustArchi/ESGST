@@ -4,7 +4,7 @@
 // @namespace https://SquishedPotatoe.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
-// @version 8.12.5
+// @version 8.12.6
 // @author rafaelgomesxyz
 // @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
@@ -6527,6 +6527,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _browser__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(139);
 /* harmony import */ var _class_Queue__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(140);
 /* harmony import */ var _class_Shared__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(155);
+var _browser$gm$info, _browser$gm$info2;
 
 
 
@@ -6641,7 +6642,7 @@ const browser = {
                       }
                     })();
                     const isSgStRequest = /(^|\.)steam(gifts|trades)\.com$/.test(requestHost);
-                    if (isSgStRequest && cfMitigated === 'challenge') {
+                    if (isSgStRequest && httpOnlySupport && cfMitigated === 'challenge') {
                       resolve({
                         cfBlocked: true,
                         url: obj.url
@@ -6735,9 +6736,12 @@ const browser = {
                     };
                     browser.gm.xmlHttpRequest(vmRequest);
                     break;
-                  } else {
-                    const cookieString = nonSessionCookies.map(item => `${item.name}=${item.value}`).join('; ');
-                    request.cookie = ['PHPSESSID=', cookieString].filter(Boolean).join('; ');
+                  } else if (browser.gm.info.scriptHandler === 'Tampermonkey') {
+                    const hasValidValues = nonSessionCookies.every(item => typeof item.value === 'string' && item.value.length > 0);
+                    if (httpOnlySupport && hasValidValues) {
+                      const cookieString = nonSessionCookies.map(item => `${item.name}=${item.value}`).join('; ');
+                      request.cookie = ['PHPSESSID=', cookieString].filter(Boolean).join('; ');
+                    }
                   }
                 } catch (error) {
                   resolve({
@@ -6822,6 +6826,7 @@ const browser = {
                       try {
                         await browser.gm.setValue(resolvingKey, '');
                       } catch (_unused4) {}
+                      lastCfResolvedAt = Date.now();
                       cfChallengePromise = null;
                     };
                     (async () => {
@@ -6835,7 +6840,6 @@ const browser = {
                               tabRef.close();
                             } catch (_unused5) {}
                           }
-                          lastCfResolvedAt = Date.now();
                           resolveInner({
                             success: true
                           });
@@ -6939,6 +6943,8 @@ const browser = {
 };
 browser.gm = GM;
 browser.gm.lastUpdate = 0;
+const [tampermonkeyMajor, tampermonkeyMinor] = (((_browser$gm$info = browser.gm.info) === null || _browser$gm$info === void 0 ? void 0 : _browser$gm$info.version) || '0.0').split('.').map(Number);
+const httpOnlySupport = ((_browser$gm$info2 = browser.gm.info) === null || _browser$gm$info2 === void 0 ? void 0 : _browser$gm$info2.scriptHandler) === 'Tampermonkey' && (tampermonkeyMajor > 5 || tampermonkeyMajor === 5 && tampermonkeyMinor >= 6);
 const lastRequests = {};
 _class_Queue__WEBPACK_IMPORTED_MODULE_8__["RequestQueue"].getLastRequest = key => {
   var _lastRequests$key;
@@ -6951,7 +6957,9 @@ _class_Queue__WEBPACK_IMPORTED_MODULE_8__["RequestQueue"].getRequestThresholds =
   var _settings$useCustomAd;
   const values = await browser.storage.local.get('settings');
   const settings = values.settings ? JSON.parse(values.settings) : {};
-  if ((_settings$useCustomAd = settings['useCustomAdaReqLim_sg']) !== null && _settings$useCustomAd !== void 0 && _settings$useCustomAd.enabled) {
+  const setting = (_settings$useCustomAd = settings['useCustomAdaReqLim_sg']) !== null && _settings$useCustomAd !== void 0 ? _settings$useCustomAd : settings['useCustomAdaReqLim'];
+  const isEnabled = typeof setting === 'object' ? !!(setting !== null && setting !== void 0 && setting.enabled) : !!setting;
+  if (isEnabled) {
     const thresholds = {};
     for (const [key, minThreshold] of Object.entries(_class_Queue__WEBPACK_IMPORTED_MODULE_8__["RequestQueue"].queue.sg.minThresholds)) {
       var _settings;
@@ -12527,7 +12535,7 @@ class _RequestQueue {
     });
     _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "continuouslyCheckLocalRequests", async () => {
       await this.checkLocalRequests();
-      setTimeout(this.continuouslyCheckLocalRequests, 15000);
+      setTimeout(this.continuouslyCheckLocalRequests, 5000);
     });
     _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(this, "checkLocalRequests", async () => {
       if (this.isCheckingLocalRequests || !this.queue.sg.wasRequesting) {
@@ -12547,8 +12555,10 @@ class _RequestQueue {
       let hourTotal = 0;
       let dayTotal = 0;
       let requestLog = await this.getRequestLog();
-      requestLog = requestLog.filter(log => now - log.timestamp <= 86400000);
       for (const log of requestLog) {
+        if (now - log.timestamp > 86400000) {
+          break;
+        }
         const date = new Date(log.timestamp);
         const day = date.getDate();
         const hour = date.getHours();
@@ -12749,8 +12759,36 @@ class _Settings {
     this.fullSettings = {};
     this.aliases = {};
     this.defaultValues = {
+      activateTab_sg: false,
+      activateTab_st: false,
+      notifyNewVersion_sg: false,
+      notifyNewVersion_st: false,
+      useCustomAdaReqLim_sg: false,
+      useCustomAdaReqLim_st: false,
+      notifyLogs_sg: false,
+      notifyLogs_st: false,
+      jumpToReplyBox_sg: false,
+      jumpToReplyBox_st: false,
+      removeSidebarInFeaturePages_sg: false,
+      openSettingsInTab_sg: false,
+      openSettingsInTab_st: false,
+      manipulateCookies_sg: false,
+      manipulateCookies_st: false,
+      askFileName_sg: false,
+      askFileName_st: false,
+      openAutoBackupNewTab_sg: false,
+      openAutoBackupNewTab_st: false,
+      autoSync_sg: false,
+      openAutoSyncPopup_sg: false,
+      openAutoSyncNewTab_sg: false,
+      makeSectionsCollapsible_sg: false,
+      makeSectionsCollapsible_st: false,
+      enableByDefault_sg: false,
+      enableByDefault_st: false,
+      fallbackSteamApi_sg: false,
+      fallbackSteamApi_st: false,
       mgl_index: 0,
-      limitSteamStore_sg: true,
+      limitSteamStore_sg: false,
       customAdaReqLim_default: 0.25,
       customAdaReqLim_minute50: 0.5,
       customAdaReqLim_minute75: 1,
@@ -12802,8 +12840,8 @@ class _Settings {
       cewgd_w_sl_sg: true,
       cewgd_w_t_sg: true,
       cewgd_w_l_sg: true,
-      esgst_st: true,
-      esgst_sgt: true,
+      esgst_st: false,
+      esgst_sgt: false,
       ge_extractOnward: false,
       ge_flushCache: false,
       ge_flushCacheHours: 24,
@@ -13157,11 +13195,11 @@ class _Settings {
       gwr_a_b_sg: false,
       hpg_sg: false,
       pm_a: false,
-      radb_sg: true,
+      radb_sg: false,
       adtd_sg: false,
       activeDiscussions_displayed: 7,
-      showChangelog_sg: true,
-      showChangelog_st: true,
+      showChangelog_sg: false,
+      showChangelog_st: false,
       vai_i_sg: false,
       avatar: '',
       steamId: '',
@@ -13192,6 +13230,14 @@ class _Settings {
       as_searchAppId: false,
       autoBackup_days: 1,
       autoBackup_index: 0,
+      autoBackup_sg: false,
+      autoBackup_st: false,
+      calculateDelete_sg: false,
+      calculateDelete_st: false,
+      calculateExport_sg: false,
+      calculateExport_st: false,
+      calculateImport_sg: false,
+      calculateImport_st: false,
       autoSyncGroups: 0,
       autoSyncWhitelist: 0,
       autoSyncBlacklist: 0,
@@ -13265,6 +13311,7 @@ class _Settings {
       gas_autoPopup: false,
       gas_optionPopup: 'sortIndex_asc',
       gb_hours: 1,
+      gb_amount: 10,
       gc_categories: ['gc_gi', 'gc_r', 'gc_hltb', 'gc_ocv', 'gc_fcv', 'gc_rcv', 'gc_ncv', 'gc_h', 'gc_i', 'gc_o', 'gc_w', 'gc_f', 'gc_pw', 'gc_a', 'gc_bd', 'gc_bvg', 'gc_sp', 'gc_mp', 'gc_sc', 'gc_tc', 'gc_l', 'gc_m', 'gc_ea', 'gc_lg', 'gc_rm', 'gc_dlc', 'gc_p', 'gc_rd', 'gc_g'],
       gc_categories_gv: ['gc_gi', 'gc_r', 'gc_hltb', 'gc_ocv', 'gc_fcv', 'gc_rcv', 'gc_ncv', 'gc_h', 'gc_i', 'gc_o', 'gc_w', 'gc_f', 'gc_pw', 'gc_a', 'gc_bd', 'gc_bvg', 'gc_sp', 'gc_mp', 'gc_sc', 'gc_tc', 'gc_l', 'gc_m', 'gc_ea', 'gc_lg', 'gc_rm', 'gc_dlc', 'gc_p', 'gc_rd', 'gc_g'],
       gc_o_altAccounts: [],
@@ -13711,7 +13758,15 @@ class _Settings {
       if (typeof value === 'undefined') {
         let defaultValue = this.defaultValues[id];
         if (typeof defaultValue === 'undefined') {
-          defaultValue = this.enableByDefault || 0;
+          const match = id.match(/(.+?)_(sg|st|sgt)$/);
+          const feature = match && _Shared__WEBPACK_IMPORTED_MODULE_6__["Shared"].esgst.featuresById[match[1]];
+          if (feature && feature[match[2]]) {
+            const namespace = match[2] === 'sgt' ? _Shared__WEBPACK_IMPORTED_MODULE_6__["Shared"].esgst.name : match[2];
+            const enableByDefault = _Shared__WEBPACK_IMPORTED_MODULE_6__["Shared"].esgst.settings[`enableByDefault_${namespace}`];
+            defaultValue = typeof enableByDefault === 'object' ? enableByDefault.enabled : enableByDefault;
+          } else {
+            defaultValue = 0;
+          }
         }
         value = defaultValue;
       } else if (id.match(/^(wbc_checkBlacklist|wbc_hb_sg)$/)) {
@@ -17678,7 +17733,7 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
           items: []
         }
       };
-      _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.requestLog = _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.requestLog.filter(log => now - log.timestamp <= 2592000000);
+      _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.requestLog = _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.requestLog.filter(log => now - log.timestamp <= 172800000);
       for (const log of _class_Shared__WEBPACK_IMPORTED_MODULE_28__["Shared"].esgst.requestLog) {
         const date = new Date(log.timestamp);
         const day = date.getDate();
@@ -17976,7 +18031,11 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
         await Object(_Sync__WEBPACK_IMPORTED_MODULE_40__["setSync"])();
       } else if (this.esgst.parameters.esgst === 'backup') {
         this.setSidebarActive('backup');
-        Object(_Storage__WEBPACK_IMPORTED_MODULE_39__["loadDataManagement"])('export');
+        if (this.esgst.parameters.autoBackupIndex !== undefined && this.esgst.parameters.autoBackupIndex !== null) {
+          this.runSilentBackup();
+        } else {
+          Object(_Storage__WEBPACK_IMPORTED_MODULE_39__["loadDataManagement"])('export');
+        }
       } else if (this.esgst.parameters.esgst === 'restore') {
         this.setSidebarActive('restore');
         Object(_Storage__WEBPACK_IMPORTED_MODULE_39__["loadDataManagement"])('import');
@@ -19443,9 +19502,16 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
       await Object(_Sync__WEBPACK_IMPORTED_MODULE_40__["setSync"])();
     } else if (!isSyncing || currentDate - isSyncing > 1800000) {
       let parameters = '';
+      let failedAutoSyncs = {};
+      try {
+        failedAutoSyncs = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_17__["LocalStorage"].get('failedAutoSyncs', '{}'));
+      } catch (e) {}
       _class_LocalStorage__WEBPACK_IMPORTED_MODULE_17__["LocalStorage"].set('isSyncing', currentDate);
       ['Groups', 'SteamFriends', 'Games', 'FollowedGames', 'WonGames', 'ReducedCvGames', 'NoCvGames', 'HltbTimes', 'DelistedGames', 'Giveaways', 'WonGiveaways'].forEach(key => {
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get(`autoSync${key}`) && currentDate - _class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get(`lastSync${key}`) > _class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get(`autoSync${key}`) * 86400000) {
+        const interval = _class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get(`autoSync${key}`);
+        const failedAt = failedAutoSyncs[key];
+        const failedRetryDue = !failedAt || currentDate - failedAt > interval * 86400000;
+        if (interval && failedRetryDue && currentDate - _class_Settings__WEBPACK_IMPORTED_MODULE_26__["Settings"].get(`lastSync${key}`) > interval * 86400000) {
           parameters += `${key}=1&`;
         }
       });
@@ -25900,18 +25966,24 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FetchRequest", function() { return FetchRequest; });
 /* harmony import */ var _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(141);
 /* harmony import */ var _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(147);
-/* harmony import */ var core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(89);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(98);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _browser__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(139);
-/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(152);
-/* harmony import */ var _DOM__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(208);
-/* harmony import */ var _Lock__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(211);
-/* harmony import */ var _Settings__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(146);
-/* harmony import */ var _Shared__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(155);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(147);
+/* harmony import */ var core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_constructor_js__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(89);
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(98);
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(107);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_5__);
+/* harmony import */ var _browser__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(139);
+/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(152);
+/* harmony import */ var _DOM__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(208);
+/* harmony import */ var _Lock__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(211);
+/* harmony import */ var _Settings__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(146);
+/* harmony import */ var _Shared__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(155);
+
+
 
 
 
@@ -25923,6 +25995,32 @@ __webpack_require__.r(__webpack_exports__);
 
 
 class FetchRequest {
+  static getEnv() {
+    if (!FetchRequest._env) {
+      FetchRequest._env = (async (_browser$gm, _browser$gm2) => {
+        const [tampermonkeyMajor, tampermonkeyMinor] = (((_browser$gm = _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].gm) === null || _browser$gm === void 0 || (_browser$gm = _browser$gm.info) === null || _browser$gm === void 0 ? void 0 : _browser$gm.version) || '0.0').split('.').map(Number);
+        const isTampermonkey = ((_browser$gm2 = _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].gm) === null || _browser$gm2 === void 0 || (_browser$gm2 = _browser$gm2.info) === null || _browser$gm2 === void 0 ? void 0 : _browser$gm2.scriptHandler) === 'Tampermonkey';
+        const browserInfo = await _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getBrowserInfo();
+        return {
+          isUserscript: browserInfo.name === 'userscript',
+          isFirefox: browserInfo.name === 'Firefox',
+          isTampermonkey,
+          httpOnlySupport: isTampermonkey && (tampermonkeyMajor > 5 || tampermonkeyMajor === 5 && tampermonkeyMinor >= 6)
+        };
+      })();
+    }
+    return FetchRequest._env;
+  }
+  static async getLoggedOutOptions() {
+    const {
+      httpOnlySupport
+    } = await FetchRequest.getEnv();
+    return httpOnlySupport ? {
+      loggedOut: true
+    } : {
+      anon: true
+    };
+  }
   static delete(url, options = {}) {
     return FetchRequest.send(url, {
       ...options,
@@ -25955,13 +26053,16 @@ class FetchRequest {
   }
   static async send(url, options) {
     if (!FetchRequest.REQUIRED_HEADERS['Esgst-Version']) {
-      FetchRequest.REQUIRED_HEADERS['Esgst-Version'] = _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.currentVersion;
+      FetchRequest.REQUIRED_HEADERS['Esgst-Version'] = _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.currentVersion;
     }
     let response = null;
     let lock = null;
     let loggedOutRequestId = null;
-    const isUserscript = (await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.getBrowserInfo()).name === 'userscript';
-    url = url.replace(/^\//, `https://${window.location.hostname}/`).replace(/^https?:/, _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.locationHref.match(/^http:/) ? 'http:' : 'https:');
+    const {
+      isUserscript,
+      isTampermonkey
+    } = await FetchRequest.getEnv();
+    url = url.replace(/^\//, `https://${window.location.hostname}/`).replace(/^https?:/, _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.locationHref.match(/^http:/) ? 'http:' : 'https:');
     if (options.pathParams) {
       url = FetchRequest.addPathParams(url, options.pathParams);
     }
@@ -25976,16 +26077,16 @@ class FetchRequest {
     try {
       const isInternal = url.match(new RegExp(window.location.hostname));
       if (options.queue) {
-        lock = new _Lock__WEBPACK_IMPORTED_MODULE_7__["Lock"]('request', {
+        lock = new _Lock__WEBPACK_IMPORTED_MODULE_9__["Lock"]('request', {
           threshold: typeof options.queue === 'number' ? options.queue : 1000
         });
       } else if (isInternal && !options.doNotQueue) {
-        await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+        await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
           action: 'queue_request',
           key: 'sg'
         });
-      } else if (url.match(/^https?:\/\/store.steampowered.com/) && _Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('limitSteamStore')) {
-        lock = new _Lock__WEBPACK_IMPORTED_MODULE_7__["Lock"]('steamStore', {
+      } else if (url.match(/^https?:\/\/store.steampowered.com/) && _Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('limitSteamStore')) {
+        lock = new _Lock__WEBPACK_IMPORTED_MODULE_9__["Lock"]('steamStore', {
           threshold: 200
         });
       }
@@ -25997,7 +26098,7 @@ class FetchRequest {
         if (!isInternal) {
           throw new Error('Logged-out requests are only supported for the current site');
         }
-        let res = await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+        let res = await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
           action: 'start_logged_out_fetch',
           url
         });
@@ -26023,14 +26124,17 @@ class FetchRequest {
         if (!(err !== null && err !== void 0 && err.cfBlocked)) {
           throw err;
         }
+        if (isUserscript && (!isTampermonkey || !(await FetchRequest.getEnv()).httpOnlySupport)) {
+          throw new Error('Cloudflare challenge is unavailable');
+        }
         if (loggedOutRequestId !== null) {
-          await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+          await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
             action: 'end_logged_out_fetch',
             requestId: loggedOutRequestId
           }).catch(() => {});
           loggedOutRequestId = null;
         }
-        let cfRes = await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+        let cfRes = await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
           action: 'resolve_cf_challenge',
           url
         }).catch(() => null);
@@ -26044,7 +26148,7 @@ class FetchRequest {
         }
         if (options.loggedOut && !isUserscript) {
           var _res3;
-          let res = await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+          let res = await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
             action: 'start_logged_out_fetch',
             url
           });
@@ -26066,17 +26170,24 @@ class FetchRequest {
         }
       }
       if (isInternal) {
-        _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.requestLog.unshift({
+        const requestTimestamp = Date.now();
+        _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog.unshift({
           url,
-          timestamp: Date.now()
+          timestamp: requestTimestamp
         });
         if (response.redirected) {
-          _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.requestLog.unshift({
+          _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog.unshift({
             url: response.url,
-            timestamp: Date.now()
+            timestamp: requestTimestamp
           });
         }
-        await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.setValue('requestLog', JSON.stringify(_Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].esgst.requestLog));
+        const requestLogCutoff = requestTimestamp - 172800000;
+        while (_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog.length > 0) {
+          const oldestRequest = _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog[_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog.length - 1];
+          if (oldestRequest.timestamp >= requestLogCutoff) break;
+          _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog.pop();
+        }
+        await _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('requestLog', JSON.stringify(_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.requestLog));
       }
       if (lock) {
         await lock.unlock();
@@ -26088,11 +26199,11 @@ class FetchRequest {
       } catch (err) {}
       if (!response.json) {
         try {
-          response.html = _DOM__WEBPACK_IMPORTED_MODULE_6__["DOM"].parse(response.text);
+          response.html = _DOM__WEBPACK_IMPORTED_MODULE_8__["DOM"].parse(response.text);
         } catch (err) {}
       }
       if (response.url.match(/www.steamgifts.com/) && response.html) {
-        _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.lookForPopups(response);
+        _Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.lookForPopups(response);
       }
       return response;
     } catch (err) {
@@ -26102,7 +26213,7 @@ class FetchRequest {
       throw err;
     } finally {
       if (loggedOutRequestId !== null) {
-        await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage({
+        await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage({
           action: 'end_logged_out_fetch',
           requestId: loggedOutRequestId
         }).catch(() => {});
@@ -26119,6 +26230,10 @@ class FetchRequest {
       timeout = 10000
     } = options;
     const timeoutId = window.setTimeout(() => abortController.abort(), timeout);
+    const {
+      isUserscript: isscript,
+      isTampermonkey
+    } = await FetchRequest.getEnv();
     fetchOptions.signal = abortController.signal;
     let response;
     try {
@@ -26127,13 +26242,17 @@ class FetchRequest {
       window.clearTimeout(timeoutId);
     }
     if (response.status === 403 || response.status === 503) {
-      var _response$headers$get;
-      const cfMitigated = (_response$headers$get = response.headers.get('cf-mitigated')) === null || _response$headers$get === void 0 ? void 0 : _response$headers$get.toLowerCase();
-      if (cfMitigated === 'challenge') {
-        throw Object.assign(new Error('CF_BLOCKED'), {
-          cfBlocked: true,
-          url
-        });
+      if (isscript && (!isTampermonkey || !(await FetchRequest.getEnv()).httpOnlySupport)) {
+        throw new Error(`Request failed with status ${response.status} (Cloudflare challenge unavailable)`);
+      } else {
+        var _response$headers$get;
+        const cfMitigated = (_response$headers$get = response.headers.get('cf-mitigated')) === null || _response$headers$get === void 0 ? void 0 : _response$headers$get.toLowerCase();
+        if (cfMitigated === 'challenge') {
+          throw Object.assign(new Error('CF_BLOCKED'), {
+            cfBlocked: true,
+            url
+          });
+        }
       }
     }
     const text = await response.text();
@@ -26148,7 +26267,10 @@ class FetchRequest {
     };
   }
   static async sendExternal(url, options) {
-    const manipulateCookies = (await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.getBrowserInfo()).name === 'Firefox' && _Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('manipulateCookies');
+    const {
+      isFirefox
+    } = await FetchRequest.getEnv();
+    const manipulateCookies = isFirefox && _Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('manipulateCookies');
     const messageOptions = {
       action: 'fetch',
       blob: options.blob,
@@ -26159,11 +26281,11 @@ class FetchRequest {
       timeout: options.timeout,
       url
     };
-    let response = await _browser__WEBPACK_IMPORTED_MODULE_4__["browser"].runtime.sendMessage(messageOptions);
+    let response = await _browser__WEBPACK_IMPORTED_MODULE_6__["browser"].runtime.sendMessage(messageOptions);
     if (typeof response === 'string') {
       response = JSON.parse(response);
     }
-    if (_lib_jsUtils__WEBPACK_IMPORTED_MODULE_5__["Utils"].isSet(response.error)) {
+    if (_lib_jsUtils__WEBPACK_IMPORTED_MODULE_7__["Utils"].isSet(response.error)) {
       throw new Error(response.error);
     }
     if (response.cfBlocked) {
@@ -26183,7 +26305,10 @@ class FetchRequest {
     let fetchObj = null;
     let fetchOptions = FetchRequest.getFetchOptions(options);
     let abortController = null;
-    if ((await _Shared__WEBPACK_IMPORTED_MODULE_9__["Shared"].common.getBrowserInfo()).name === 'Firefox' && 'wrappedJSObject' in window && window.wrappedJSObject) {
+    const {
+      isFirefox: isFirefoxEnv
+    } = await FetchRequest.getEnv();
+    if (isFirefoxEnv && 'wrappedJSObject' in window && window.wrappedJSObject) {
       fetchObj = XPCNativeWrapper(window.wrappedJSObject.fetch);
       window.wrappedJSObject.fetchOptions = cloneInto(fetchOptions, window);
       fetchOptions = XPCNativeWrapper(window.wrappedJSObject.fetchOptions);
@@ -26234,6 +26359,7 @@ _babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(Fet
   'Esgst-Version': '',
   From: 'esgst.extension@gmail.com'
 });
+_babel_runtime_helpers_defineProperty__WEBPACK_IMPORTED_MODULE_0___default()(FetchRequest, "_env", null);
 
 /***/ }),
 /* 211 */
@@ -30005,7 +30131,7 @@ class SettingsModule {
             this.requiredPermissions = {};
           }
           await _class_Shared__WEBPACK_IMPORTED_MODULE_16__["Shared"].common.lockAndSaveSettings(this.toSave);
-          const adareqlimChanged = Object.keys(this.toSave).some(key => key.startsWith('customAdaReqLim'));
+          const adareqlimChanged = Object.keys(this.toSave).some(key => key.startsWith('useCustomAdaReqLim') || key.startsWith('customAdaReqLim'));
           if (adareqlimChanged) {
             await _browser__WEBPACK_IMPORTED_MODULE_9__["browser"].runtime.sendMessage({
               action: 'update_adareqlim'
@@ -32850,15 +32976,20 @@ async function runSilentSync(parameters) {
     ..._class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.parameters,
     ..._lib_jsUtils__WEBPACK_IMPORTED_MODULE_22__["Utils"].getQueryParams(`?autoSync=true&${parameters.replace(/&$/, '')}`)
   };
-  const syncer = await setSync(false, true);
-  button.nodes.outer.addEventListener('click', () => syncer.popup.open());
-  _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = true;
-  await sync(syncer);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = false;
-  button.nodes.outer.classList.remove('nav__button-container--active');
-  button.nodes.outer.classList.add('nav__button-container--inactive');
-  button.nodes.buttonIcon.className = 'fa fa-check';
-  button.nodes.buttonIcon.title = 'ESGST has finished syncing, click here to see the results.';
+  try {
+    const syncer = await setSync(false, true);
+    button.nodes.outer.addEventListener('click', () => syncer.popup.open());
+    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = true;
+    await sync(syncer);
+  } catch (error) {
+    console.error('[ESGST] Automatic sync failed:', error);
+  } finally {
+    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = false;
+    button.nodes.outer.classList.remove('nav__button-container--active');
+    button.nodes.outer.classList.add('nav__button-container--inactive');
+    button.nodes.buttonIcon.className = 'fa fa-check';
+    button.nodes.buttonIcon.title = 'ESGST has finished syncing, click here to see the results.';
+  }
 }
 function getDependencies(syncer, feature, id) {
   if (feature.syncKeys) {
@@ -33179,6 +33310,7 @@ async function sync(syncer) {
     let pagination = null;
     do {
       let elements, responseHtml;
+      syncer.progressBar.setMessage(`Fetching your Steam groups (page ${nextPage})...`);
       responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.steamgifts.com/account/steam/groups/search?page=${nextPage}`)).html;
       elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
       for (let i = 0, n = elements.length; !syncer.canceled && i < n; i++) {
@@ -33202,6 +33334,7 @@ async function sync(syncer) {
         } else {
           let avatar, steamId;
           avatar = element.getElementsByClassName('table_image_avatar')[0].style.backgroundImage.match(/url\("(.+)"\)/)[1];
+          syncer.progressBar.setMessage(`Fetching Steam ID for ${name}...`);
           steamId = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/group/${code}/`)).html.getElementsByClassName('sidebar__shortcut-inner-wrap')[0].firstElementChild.getAttribute('href').match(/\d+/)[0];
           syncer.groups[code] = {
             avatar: avatar,
@@ -33722,9 +33855,23 @@ async function sync(syncer) {
     syncer.progressBar.setMessage('Updating last sync date...');
     let keys = ['Groups', 'Whitelist', 'Blacklist', 'SteamFriends', 'HiddenGames', 'Games', 'FollowedGames', 'WonGames', 'ReducedCvGames', 'NoCvGames', 'HltbTimes', 'DelistedGames', 'Giveaways', 'WonGiveaways'];
     for (let i = keys.length - 1; i > -1; i--) {
+      var _syncer$parameters;
       let key = keys[i];
       let id = `sync${key}`;
-      if (!syncer.failed[key] && (syncer.parameters && syncer.parameters[key] || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(id))) {
+      const wasRequested = syncer.parameters && syncer.parameters[key] || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(id);
+      if (wasRequested && (_syncer$parameters = syncer.parameters) !== null && _syncer$parameters !== void 0 && _syncer$parameters.autoSync) {
+        let failedAutoSyncs = {};
+        try {
+          failedAutoSyncs = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].get('failedAutoSyncs', '{}'));
+        } catch (e) {}
+        if (syncer.failed[key]) {
+          failedAutoSyncs[key] = now;
+        } else {
+          delete failedAutoSyncs[key];
+        }
+        _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].set('failedAutoSyncs', JSON.stringify(failedAutoSyncs));
+      }
+      if (wasRequested && !syncer.failed[key]) {
         _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].set(`lastSync${key}`, now);
         toSave[`lastSync${key}`] = now;
       }
@@ -33732,7 +33879,9 @@ async function sync(syncer) {
     await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveSettings(toSave);
     toSave = {};
     syncer.progressBar.setSuccess('Synced!');
-    _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].delete('isSyncing');
+    if (!Object.keys(syncer.failed).length) {
+      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].delete('isSyncing');
+    }
   }
   if (!syncer.isSilent) {
     updateSyncDates(syncer);
@@ -34582,27 +34731,35 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "manageData", function() { return manageData; });
 /* harmony import */ var core_js_modules_es_symbol_description_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(168);
 /* harmony import */ var core_js_modules_es_symbol_description_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_symbol_description_js__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5);
-/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(89);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(98);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(107);
-/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_4__);
-/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(208);
-/* harmony import */ var _class_LocalStorage__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(145);
-/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(223);
-/* harmony import */ var _class_PersistentStorage__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(250);
-/* harmony import */ var _class_Popup__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(213);
-/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(146);
-/* harmony import */ var _class_Shared__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(155);
-/* harmony import */ var _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(234);
-/* harmony import */ var _components_Button__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(214);
-/* harmony import */ var _components_PageHeading__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(226);
-/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(152);
-/* harmony import */ var _CloudStorage__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(255);
-/* harmony import */ var _Settings__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(236);
+/* harmony import */ var core_js_modules_es_array_flat_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(227);
+/* harmony import */ var core_js_modules_es_array_flat_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_flat_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(5);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var core_js_modules_es_array_unscopables_flat_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(232);
+/* harmony import */ var core_js_modules_es_array_unscopables_flat_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_unscopables_flat_js__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(89);
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(98);
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_5__);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(107);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_6__);
+/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(208);
+/* harmony import */ var _class_LocalStorage__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(145);
+/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(223);
+/* harmony import */ var _class_PersistentStorage__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(250);
+/* harmony import */ var _class_Popup__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(213);
+/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(146);
+/* harmony import */ var _class_Shared__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(155);
+/* harmony import */ var _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(234);
+/* harmony import */ var _components_Button__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(214);
+/* harmony import */ var _components_PageHeading__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(226);
+/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(152);
+/* harmony import */ var _CloudStorage__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(255);
+/* harmony import */ var _Settings__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(236);
+/* harmony import */ var _browser__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(139);
+
+
+
 
 
 
@@ -34628,18 +34785,61 @@ const STORAGE_TYPES = {
   GOOGLE_DRIVE: 3,
   ONEDRIVE: 4
 };
+function materializeSettingsDefaults(settings) {
+  const completed = {
+    ...settings
+  };
+  for (const [key, value] of Object.entries(_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].defaultValues)) {
+    if (!(key in completed)) {
+      completed[key] = value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+  }
+  for (const [id, feature] of Object.entries(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.featuresById)) {
+    var _feature$alias;
+    const featureId = (_feature$alias = feature.alias) !== null && _feature$alias !== void 0 ? _feature$alias : id;
+    const inputItems = feature.inputItems == null ? [] : Array.isArray(feature.inputItems) ? feature.inputItems : [feature.inputItems];
+    for (const item of inputItems) {
+      const key = typeof item === 'string' ? item : item === null || item === void 0 ? void 0 : item.id;
+      if (key && !(key in completed)) {
+        var _Settings$defaultValu;
+        completed[key] = (_Settings$defaultValu = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].defaultValues[key]) !== null && _Settings$defaultValu !== void 0 ? _Settings$defaultValu : 0;
+      }
+    }
+    const options = feature.options ? Array.isArray(feature.options) ? feature.options : [feature.options] : [];
+    for (let index = 0; index < options.length; index++) {
+      const key = `${featureId}_index${options.length > 1 ? `_${index}` : ''}`;
+      if (!(key in completed)) {
+        var _Settings$defaultValu2;
+        completed[key] = (_Settings$defaultValu2 = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].defaultValues[key]) !== null && _Settings$defaultValu2 !== void 0 ? _Settings$defaultValu2 : 0;
+      }
+    }
+    for (const namespace of ['sg', 'st']) {
+      const key = `${featureId}_${namespace}`;
+      if (!feature[namespace] || key in completed) continue;
+      if (typeof _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].defaultValues[key] !== 'undefined') {
+        completed[key] = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].defaultValues[key];
+      } else {
+        const defaultSetting = completed[`enableByDefault_${namespace}`];
+        completed[key] = !!(typeof defaultSetting === 'object' ? defaultSetting.enabled : defaultSetting);
+      }
+    }
+  }
+  const dismissedOptions = Array.isArray(completed.dismissedOptions) ? completed.dismissedOptions : [];
+  completed.dismissedOptions = Array.from(new Set(dismissedOptions.concat(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.toDismiss.flat(Infinity).filter(id => typeof id === 'string'))));
+  return completed;
+}
 function getDataMenu(option, switches, type) {
   let i, m, menu, n, options, toggleSwitch;
   menu = document.createElement('div');
-  switches[option.key] = toggleSwitch = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](menu, `${type}_${option.key}`, false, option.name, false, false, null, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${type}_${option.key}`));
-  switches[option.key].size = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(switches[option.key].name, 'beforeend', [{
+  switches[option.key] = toggleSwitch = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](menu, `${type}_${option.key}`, false, option.name, false, false, null, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${type}_${option.key}`));
+  switches[option.key].size = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(switches[option.key].name, 'beforeend', [{
     attributes: {
       class: 'esgst-bold'
     },
     type: 'span'
   }]);
   if (option.name === 'Main') {
-    _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(switches[option.key].name, 'beforeend', [{
+    _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(switches[option.key].name, 'beforeend', [{
       attributes: {
         class: 'fa fa-question-circle',
         title: `Main data is the data that is needed by other sub-options. Because of that dependency, when deleting main data not all data may be deleted, but if you delete another sub-option first and then delete main data, all data that was required exclusively by that sub-option will be deleted.`
@@ -34648,7 +34848,7 @@ function getDataMenu(option, switches, type) {
     }]);
   }
   if (option.options) {
-    options = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(menu, 'beforeend', [{
+    options = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(menu, 'beforeend', [{
       attributes: {
         class: 'esgst-form-row-indent SMFeatures esgst-hidden'
       },
@@ -34656,7 +34856,7 @@ function getDataMenu(option, switches, type) {
     }]);
     const optionSwitches = {};
     if (option.options.length > 1) {
-      const group = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(options, 'beforeend', [{
+      const group = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(options, 'beforeend', [{
         attributes: {
           class: 'esgst-button-group'
         },
@@ -34666,31 +34866,31 @@ function getDataMenu(option, switches, type) {
           type: 'span'
         }]
       }]);
-      _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'white',
         icons: ['fa-square'],
         name: 'All',
-        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, optionSwitches, 'enable', group)
+        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, optionSwitches, 'enable', group)
       }, {
         template: 'loading',
         isDisabled: true,
         name: ''
       }]).insert(group, 'beforeend');
-      _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'white',
         icons: ['fa-square-o'],
         name: 'None',
-        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, optionSwitches, 'disable', group)
+        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, optionSwitches, 'disable', group)
       }, {
         template: 'loading',
         isDisabled: true,
         name: ''
       }]).insert(group, 'beforeend');
-      _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'white',
         icons: ['fa-plus-square-o'],
         name: 'Inverse',
-        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, optionSwitches, 'toggle', group)
+        onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, optionSwitches, 'toggle', group)
       }, {
         template: 'loading',
         isDisabled: true,
@@ -34703,7 +34903,7 @@ function getDataMenu(option, switches, type) {
       options.appendChild(m);
       toggleSwitch.dependencies.push(m);
     }
-    if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${type}_${option.key}`)) {
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${type}_${option.key}`)) {
       options.classList.remove('esgst-hidden');
     }
   }
@@ -34720,7 +34920,7 @@ function getDataMenu(option, switches, type) {
   return menu;
 }
 function getDataSizes(dm) {
-  let spacePopup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+  let spacePopup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
     addScrollable: true,
     icon: 'fa-circle-o-notch fa-spin',
     title: 'Calculating data sizes...'
@@ -34730,24 +34930,24 @@ function getDataSizes(dm) {
 async function loadImportFile(dm, storageType, space, callback) {
   switch (storageType) {
     case STORAGE_TYPES.DROPBOX:
-      _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].DROPBOX, null, dm, callback);
+      _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].DROPBOX, null, dm, callback);
       break;
     case STORAGE_TYPES.GOOGLE_DRIVE:
-      _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].GOOGLEDRIVE, null, dm, callback);
+      _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].GOOGLEDRIVE, null, dm, callback);
       break;
     case STORAGE_TYPES.ONEDRIVE:
-      _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].ONEDRIVE, null, dm, callback);
+      _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].ONEDRIVE, null, dm, callback);
       break;
     case STORAGE_TYPES.COMPUTER:
       {
         let fileField, warningNode;
-        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
           isTemp: true
         });
-        popup.setScrollable(_class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+        popup.setScrollable(_class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
           type: "file",
           ref: ref => fileField = ref
-        }), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("div", {
+        }), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("div", {
           className: "esgst-description esgst-warning",
           ref: ref => warningNode = ref
         })));
@@ -34765,7 +34965,7 @@ async function loadImportFile(dm, storageType, space, callback) {
               try {
                 await readImportFile(dm, STORAGE_TYPES.COMPUTER, space, isZip, cb);
               } catch (err) {
-                _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(warningNode, 'Cannot parse file!');
+                _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(warningNode, 'Cannot parse file!');
               }
             };
             if (isZip) {
@@ -34774,7 +34974,7 @@ async function loadImportFile(dm, storageType, space, callback) {
               dm.reader.readAsText(file);
             }
           } else {
-            _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(warningNode, 'No file was loaded!');
+            _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(warningNode, 'No file was loaded!');
           }
         });
         popup.open();
@@ -34783,16 +34983,16 @@ async function loadImportFile(dm, storageType, space, callback) {
     case STORAGE_TYPES.TEXT:
       {
         let dataField, warningNode;
-        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
           isTemp: true
         });
-        _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].insert(popup.description, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("textarea", {
+        _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].insert(popup.description, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("textarea", {
           className: "esgst-textarea-large",
           style: {
             width: '900px'
           },
           ref: ref => dataField = ref
-        }), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("div", {
+        }), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("div", {
           className: "esgst-description esgst-warning",
           ref: ref => warningNode = ref
         })));
@@ -34801,7 +35001,7 @@ async function loadImportFile(dm, storageType, space, callback) {
           popup.close();
           callback();
         };
-        _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create({
+        _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create({
           template: 'success',
           name: 'Restore',
           onClick: () => {
@@ -34809,12 +35009,12 @@ async function loadImportFile(dm, storageType, space, callback) {
             if (data) {
               try {
                 dm.data = JSON.parse(data);
-                _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createConfirmation('Are you sure you want to restore the selected data?', manageData.bind(null, dm, storageType, space, cb), cb);
+                _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createConfirmation('Are you sure you want to restore the selected data?', manageData.bind(null, dm, storageType, space, cb), cb);
               } catch (err) {
-                _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(warningNode, 'Cannot parse data! Data should be in JSON format.');
+                _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(warningNode, 'Cannot parse data! Data should be in JSON format.');
               }
             } else {
-              _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(warningNode, 'No data was provided!');
+              _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(warningNode, 'No data was provided!');
             }
           }
         }).insert(popup.description, 'beforeend');
@@ -34825,18 +35025,18 @@ async function loadImportFile(dm, storageType, space, callback) {
 }
 async function readImportFile(dm, storageType, space, isZip, callback) {
   if (dm.reader) {
-    dm.data = JSON.parse(isZip ? (await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.readZip(dm.reader.result))[0].value : dm.reader.result);
+    dm.data = JSON.parse(isZip ? (await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.readZip(dm.reader.result))[0].value : dm.reader.result);
   }
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createConfirmation('Are you sure you want to restore the selected data?', manageData.bind(null, dm, storageType, space, callback), callback);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createConfirmation('Are you sure you want to restore the selected data?', manageData.bind(null, dm, storageType, space, callback), callback);
 }
 function confirmDataDeletion(dm, storageType, space, callback) {
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createConfirmation('Are you sure you want to delete the selected data?', manageData.bind(null, dm, storageType, space, callback), callback);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createConfirmation('Are you sure you want to delete the selected data?', manageData.bind(null, dm, storageType, space, callback), callback);
 }
 function loadDataManagement(type, isPopup, callback) {
   console.log(type, isPopup, callback);
   let containerr, context, group1, group2, i, n, onClick, option, prep, section, title1, title2;
   let dm = {
-    autoBackup: callback && _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.parameters.autoBackup,
+    autoBackup: callback && _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.parameters.autoBackup,
     type: type
   };
   dm[type] = true;
@@ -34866,7 +35066,7 @@ function loadDataManagement(type, isPopup, callback) {
   let popup = null;
   if (!dm.autoBackup) {
     if (isPopup) {
-      popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+      popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
         addScrollable: 'left',
         settings: true,
         isTemp: true
@@ -34874,22 +35074,22 @@ function loadDataManagement(type, isPopup, callback) {
       containerr = popup.description;
       context = popup.scrollable;
     } else {
-      context = containerr = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.sidebar.nextElementSibling;
+      context = containerr = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.sidebar.nextElementSibling;
       context.setAttribute('data-esgst-popup', 'true');
       context.innerHTML = '';
     }
     containerr.classList.add('esgst-text-left');
-    const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_14__["PageHeading"].create('storage', [{
+    const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_16__["PageHeading"].create('storage', [{
       name: 'ESGST',
-      url: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.settingsUrl
+      url: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.settingsUrl
     }, {
       name: title1,
-      url: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst[`${title1.toLowerCase()}Url`]
+      url: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst[`${title1.toLowerCase()}Url`]
     }]).insert(containerr, 'afterbegin').nodes.outer;
     if (!isPopup) {
-      _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.mainPageHeading = heading;
+      _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.mainPageHeading = heading;
     }
-    dm.computerSpace = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(containerr, 'beforeend', [{
+    dm.computerSpace = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(containerr, 'beforeend', [{
       type: 'div',
       children: [{
         text: `Total: `,
@@ -34915,7 +35115,7 @@ function loadDataManagement(type, isPopup, callback) {
     }]);
     dm.computerSpaceCount = dm.computerSpace.firstElementChild;
     dm.computerSpaceCount.nextElementSibling.addEventListener('click', () => getDataSizes(dm));
-    section = _Settings__WEBPACK_IMPORTED_MODULE_17__["settingsModule"].createMenuSection(context, null, 1, title1);
+    section = _Settings__WEBPACK_IMPORTED_MODULE_19__["settingsModule"].createMenuSection(context, null, 1, title1);
   }
   dm.switches = {};
   dm.options = [{
@@ -35118,7 +35318,7 @@ function loadDataManagement(type, isPopup, callback) {
   }];
   if (dm.autoBackup) {
     let storageType;
-    switch (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('autoBackup_index')) {
+    switch (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('autoBackup_index')) {
       case 0:
         storageType = STORAGE_TYPES.COMPUTER;
         break;
@@ -35134,8 +35334,8 @@ function loadDataManagement(type, isPopup, callback) {
     }
     // noinspection JSIgnoredPromiseFromCall
     manageData(dm, storageType, false, async () => {
-      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_6__["LocalStorage"].delete('isBackingUp');
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setSetting('lastBackup', Date.now());
+      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_8__["LocalStorage"].delete('isBackingUp');
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setSetting('lastBackup', Date.now());
       callback();
     });
   } else {
@@ -35145,7 +35345,7 @@ function loadDataManagement(type, isPopup, callback) {
         section.lastElementChild.appendChild(getDataMenu(option, dm.switches, type));
       }
     }
-    group2 = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(containerr, 'beforeend', [{
+    group2 = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(containerr, 'beforeend', [{
       attributes: {
         class: 'esgst-button-group'
       },
@@ -35155,7 +35355,7 @@ function loadDataManagement(type, isPopup, callback) {
         type: 'span'
       }]
     }]);
-    _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
       color: 'green',
       icons: ['fa-align-left'],
       name: 'Text',
@@ -35163,18 +35363,18 @@ function loadDataManagement(type, isPopup, callback) {
         return new Promise(async resolve => {
           if (dm.type !== 'export') {
             let result;
-            switch (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex')) {
+            switch (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex')) {
               case 0:
                 result = true;
                 break;
               case 1:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['dropbox']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['dropbox']]);
                 break;
               case 2:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['googleDrive']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['googleDrive']]);
                 break;
               case 3:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['oneDrive']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['oneDrive']]);
                 break;
             }
             if (!result) {
@@ -35194,7 +35394,7 @@ function loadDataManagement(type, isPopup, callback) {
       isDisabled: true,
       name: title2
     }]).insert(group2, 'beforeend');
-    const computerButton = _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    const computerButton = _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
       color: 'green',
       icons: ['fa-desktop'],
       name: 'Computer',
@@ -35202,18 +35402,18 @@ function loadDataManagement(type, isPopup, callback) {
         return new Promise(async resolve => {
           if (dm.type !== 'export') {
             let result;
-            switch (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex')) {
+            switch (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex')) {
               case 0:
                 result = true;
                 break;
               case 1:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['dropbox']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['dropbox']]);
                 break;
               case 2:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['googleDrive']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['googleDrive']]);
                 break;
               case 3:
-                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['oneDrive']]);
+                result = await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['oneDrive']]);
                 break;
             }
             if (!result) {
@@ -35237,13 +35437,13 @@ function loadDataManagement(type, isPopup, callback) {
     let googleDriveButton;
     let oneDriveButton;
     if (type !== 'delete') {
-      dropboxButton = _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      dropboxButton = _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'green',
         icons: ['fa-dropbox'],
         name: 'Dropbox',
         onClick: () => {
           return new Promise(async resolve => {
-            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['dropbox']]))) {
+            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['dropbox']]))) {
               resolve();
               return;
             }
@@ -35259,13 +35459,13 @@ function loadDataManagement(type, isPopup, callback) {
         isDisabled: true,
         name: title2
       }]).insert(group2, 'beforeend');
-      googleDriveButton = _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      googleDriveButton = _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'green',
         icons: ['fa-google'],
         name: 'Google Drive',
         onClick: () => {
           return new Promise(async resolve => {
-            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['googleDrive']]))) {
+            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['googleDrive']]))) {
               resolve();
               return;
             }
@@ -35281,13 +35481,13 @@ function loadDataManagement(type, isPopup, callback) {
         isDisabled: true,
         name: title2
       }]).insert(group2, 'beforeend');
-      oneDriveButton = _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+      oneDriveButton = _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
         color: 'green',
         icons: ['fa-windows'],
         name: 'OneDrive',
         onClick: () => {
           return new Promise(async resolve => {
-            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['oneDrive']]))) {
+            if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_9__["permissions"].contains([['oneDrive']]))) {
               resolve();
               return;
             }
@@ -35306,50 +35506,50 @@ function loadDataManagement(type, isPopup, callback) {
     }
     if (type === 'import' || type === 'delete') {
       if (type === 'import') {
-        new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](containerr, 'importAndMerge', false, 'Merge', false, false, 'Merges the current data with the backup instead of replacing it.', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge'));
+        new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](containerr, 'importAndMerge', false, 'Merge', false, false, 'Merges the current data with the backup instead of replacing it.', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge'));
       }
-      let select = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](containerr, 'exportBackup', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Backup to", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("select", {
+      let select = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](containerr, 'exportBackup', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Backup to", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("select", {
         className: "esgst-select-large"
-      }, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("option", null, "Computer"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("option", null, "Dropbox"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("option", null, "Google Drive"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("option", null, "OneDrive"))), false, false, 'Backs up the current data to one of the selected places before restoring another backup.', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackup')).name.firstElementChild;
-      select.selectedIndex = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex');
+      }, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("option", null, "Computer"), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("option", null, "Dropbox"), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("option", null, "Google Drive"), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("option", null, "OneDrive"))), false, false, 'Backs up the current data to one of the selected places before restoring another backup.', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackup')).name.firstElementChild;
+      select.selectedIndex = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex');
       select.addEventListener('change', () => {
         // noinspection JSIgnoredPromiseFromCall
-        _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setSetting('exportBackupIndex', select.selectedIndex);
+        _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setSetting('exportBackupIndex', select.selectedIndex);
       });
     }
     if (type === 'export') {
-      const input = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](containerr, 'deleteOldBackups', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Delete backups older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+      const input = new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](containerr, 'deleteOldBackups', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Delete backups older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
         className: "esgst-switch-input",
         type: "number",
-        value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('deleteOldBackups_days')
-      }), ' ', "days when backing up to the cloud."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('deleteOldBackups')).name.firstElementChild;
-      _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(input, 'deleteOldBackups_days', true);
+        value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('deleteOldBackups_days')
+      }), ' ', "days when backing up to the cloud."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('deleteOldBackups')).name.firstElementChild;
+      _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(input, 'deleteOldBackups_days', true);
     }
     if (type === 'import' || type === 'export') {
-      _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](containerr, 'usePreferredGoogle', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Use preferred Google account:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+      _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](containerr, 'usePreferredGoogle', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Use preferred Google account:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
         className: "esgst-switch-input esgst-switch-input-large",
         placeholder: "example@gmail.com",
         type: "text"
-      }), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("span", {
+      }), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("span", {
         className: "esgst-bold esgst-clickable",
-        onclick: () => window.alert(_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('preferredGoogle') || 'No email address defined')
-      }, "Reveal")), false, false, `With this option enabled, you will not be prompted to select an account when restoring/backing up to Google Drive. The account associated with the email address entered here will be automatically selected if you're already logged in. For security purposes, the email address will not be visible if you re-open the menu. After that, you have to click on "Reveal" to see it.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('usePreferredGoogle')).name.firstElementChild, 'preferredGoogle', true);
-      _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](containerr, 'usePreferredMicrosoft', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Use preferred Microsoft account:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+        onclick: () => window.alert(_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('preferredGoogle') || 'No email address defined')
+      }, "Reveal")), false, false, `With this option enabled, you will not be prompted to select an account when restoring/backing up to Google Drive. The account associated with the email address entered here will be automatically selected if you're already logged in. For security purposes, the email address will not be visible if you re-open the menu. After that, you have to click on "Reveal" to see it.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('usePreferredGoogle')).name.firstElementChild, 'preferredGoogle', true);
+      _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](containerr, 'usePreferredMicrosoft', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Use preferred Microsoft account:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
         className: "esgst-switch-input esgst-switch-input-large",
         placeholder: "example@outlook.com",
         type: "text"
-      }), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("span", {
+      }), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("span", {
         className: "esgst-bold esgst-clickable",
-        onclick: () => window.alert(_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('preferredMicrosoft') || 'No email address defined')
-      }, "Reveal")), false, false, `With this option enabled, you will not be prompted to select an account when restoring/backing up to OneDrive. The account associated with the email address entered here will be automatically selected if you're already logged in. For security purposes, the email address will not be visible if you re-open the menu. After that, you have to click on "Reveal" to see it.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('usePreferredMicrosoft')).name.firstElementChild, 'preferredMicrosoft', true);
+        onclick: () => window.alert(_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('preferredMicrosoft') || 'No email address defined')
+      }, "Reveal")), false, false, `With this option enabled, you will not be prompted to select an account when restoring/backing up to OneDrive. The account associated with the email address entered here will be automatically selected if you're already logged in. For security purposes, the email address will not be visible if you re-open the menu. After that, you have to click on "Reveal" to see it.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('usePreferredMicrosoft')).name.firstElementChild, 'preferredMicrosoft', true);
     }
-    dm.message = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(containerr, 'beforeend', [{
+    dm.message = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(containerr, 'beforeend', [{
       attributes: {
         class: 'esgst-description'
       },
       type: 'div'
     }]);
-    group1 = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(containerr, 'beforeend', [{
+    group1 = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(containerr, 'beforeend', [{
       attributes: {
         class: 'esgst-button-group'
       },
@@ -35359,31 +35559,31 @@ function loadDataManagement(type, isPopup, callback) {
         type: 'span'
       }]
     }]);
-    _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
       color: 'white',
       icons: ['fa-square'],
       name: 'All',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, dm.switches, 'enable', group1)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, dm.switches, 'enable', group1)
     }, {
       template: 'loading',
       isDisabled: true,
       name: ''
     }]).insert(group1, 'beforeend');
-    _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
       color: 'white',
       icons: ['fa-square-o'],
       name: 'None',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, dm.switches, 'disable', group1)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, dm.switches, 'disable', group1)
     }, {
       template: 'loading',
       isDisabled: true,
       name: ''
     }]).insert(group1, 'beforeend');
-    _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
       color: 'white',
       icons: ['fa-plus-square-o'],
       name: 'Inverse',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common, dm.switches, 'toggle', group1)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common, dm.switches, 'toggle', group1)
     }, {
       template: 'loading',
       isDisabled: true,
@@ -35392,11 +35592,11 @@ function loadDataManagement(type, isPopup, callback) {
     if (isPopup) {
       popup.open();
     }
-    if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`calculate${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.capitalizeFirstLetter(type)}`)) {
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`calculate${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.capitalizeFirstLetter(type)}`)) {
       getDataSizes(dm);
     }
-    if (_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.parameters.esgst === 'backup' && _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.parameters.autoBackupIndex) {
-      switch (parseInt(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.parameters.autoBackupIndex)) {
+    if (_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.parameters.esgst === 'backup' && _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.parameters.autoBackupIndex !== undefined && _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.parameters.autoBackupIndex !== null) {
+      switch (parseInt(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.parameters.autoBackupIndex)) {
         case 0:
           computerButton.onClick();
           break;
@@ -35417,7 +35617,7 @@ function loadDataCleaner(isPopup) {
   let containerr = null;
   let context = null;
   if (isPopup) {
-    const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+    const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
       addScrollable: 'left',
       settings: true,
       isTemp: true
@@ -35426,60 +35626,60 @@ function loadDataCleaner(isPopup) {
     context = popup.scrollable;
     popup.open();
   } else {
-    containerr = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.sidebar.nextElementSibling;
+    containerr = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.sidebar.nextElementSibling;
     containerr.innerHTML = '';
     context = containerr;
     context.setAttribute('data-esgst-popup', 'true');
   }
-  const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_14__["PageHeading"].create('storage', [{
+  const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_16__["PageHeading"].create('storage', [{
     name: 'ESGST',
-    url: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.settingsUrl
+    url: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.settingsUrl
   }, {
     name: 'Clean',
-    url: _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.cleanUrl
+    url: _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.cleanUrl
   }]).insert(containerr, 'afterbegin').nodes.outer;
   if (!isPopup) {
-    _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.mainPageHeading = heading;
+    _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].esgst.mainPageHeading = heading;
   }
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createElements(context, 'beforeend', [{
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createElements(context, 'beforeend', [{
     attributes: {
       class: 'esgst-bold esgst-description esgst-red'
     },
     text: 'Make sure to backup your data before using the cleaner.',
     type: 'div'
   }]);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanDiscussions', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Discussions data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanDiscussions', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Discussions data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDiscussions_days')
-  }), ' ', "days."), false, false, `Discussions data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDiscussions')).name.firstElementChild, 'cleanDiscussions_days', true);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanEntries', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Entries data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDiscussions_days')
+  }), ' ', "days."), false, false, `Discussions data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDiscussions')).name.firstElementChild, 'cleanDiscussions_days', true);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanEntries', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Entries data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanEntries_days')
-  }), ' ', "days."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanEntries')).name.firstElementChild, 'cleanEntries_days', true);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanGiveaways', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Giveaways data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanEntries_days')
+  }), ' ', "days."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanEntries')).name.firstElementChild, 'cleanEntries_days', true);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanGiveaways', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Giveaways data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanGiveaways_days')
-  }), ' ', "days."), false, false, `Some giveaways data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanGiveaways')).name.firstElementChild, 'cleanGiveaways_days', true);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanSgCommentHistory', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "SteamGifts comment history data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanGiveaways_days')
+  }), ' ', "days."), false, false, `Some giveaways data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanGiveaways')).name.firstElementChild, 'cleanGiveaways_days', true);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanSgCommentHistory', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "SteamGifts comment history data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanSgCommentHistory_days')
-  }), ' ', "days."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanSgCommentHistory')).name.firstElementChild, 'cleanSgCommentHistory_days', true);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanTickets', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Tickets data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanSgCommentHistory_days')
+  }), ' ', "days."), false, false, '', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanSgCommentHistory')).name.firstElementChild, 'cleanSgCommentHistory_days', true);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanTickets', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Tickets data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTickets_days')
-  }), ' ', "days."), false, false, `Tickets data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTickets')).name.firstElementChild, 'cleanTickets_days', true);
-  _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanTrades', false, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Trades data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("input", {
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTickets_days')
+  }), ' ', "days."), false, false, `Tickets data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTickets')).name.firstElementChild, 'cleanTickets_days', true);
+  _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.observeNumChange(new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanTrades', false, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Trades data older than", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("input", {
     className: "esgst-switch-input",
     type: "text",
-    value: _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTrades_days')
-  }), ' ', "days."), false, false, `Trades data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTrades')).name.firstElementChild, 'cleanTrades_days', true);
-  new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_12__["ToggleSwitch"](context, 'cleanDuplicates', false, 'Duplicate data.', false, false, 'Cleans up any duplicate data it finds.', _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDuplicates'));
-  _components_Button__WEBPACK_IMPORTED_MODULE_13__["Button"].create([{
+    value: _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTrades_days')
+  }), ' ', "days."), false, false, `Trades data only started being date-tracked since v7.11.0, so not all old data may be cleaned.`, _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTrades')).name.firstElementChild, 'cleanTrades_days', true);
+  new _class_ToggleSwitch__WEBPACK_IMPORTED_MODULE_14__["ToggleSwitch"](context, 'cleanDuplicates', false, 'Duplicate data.', false, false, 'Cleans up any duplicate data it finds.', _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDuplicates'));
+  _components_Button__WEBPACK_IMPORTED_MODULE_15__["Button"].create([{
     template: 'success',
     name: 'Clean',
     onClick: async () => {
@@ -35681,21 +35881,21 @@ function loadDataCleaner(isPopup) {
       const oldSize = await manageData(dm, STORAGE_TYPES.COMPUTER, true);
       let currentTime = Date.now();
       let toSave = {};
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDiscussions')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDiscussions_days') * 86400000;
-        toSave.discussions = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('discussions', '{}'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDiscussions')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDiscussions_days') * 86400000;
+        toSave.discussions = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('discussions', '{}'));
         for (let code in toSave.discussions) {
           if (toSave.discussions.hasOwnProperty(code)) {
             let item = toSave.discussions[code];
-            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
+            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
               delete toSave.discussions[code];
             }
           }
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanEntries')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanEntries_days') * 86400000;
-        let items = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('entries', '[]'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanEntries')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanEntries_days') * 86400000;
+        let items = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('entries', '[]'));
         toSave.entries = [];
         items.forEach(item => {
           if (currentTime - item.timestamp <= days) {
@@ -35703,21 +35903,21 @@ function loadDataCleaner(isPopup) {
           }
         });
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanGiveaways')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanGiveaways_days') * 86400000;
-        toSave.giveaways = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('giveaways', '{}'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanGiveaways')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanGiveaways_days') * 86400000;
+        toSave.giveaways = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('giveaways', '{}'));
         for (let code in toSave.giveaways) {
           if (toSave.giveaways.hasOwnProperty(code)) {
             let item = toSave.giveaways[code];
-            if (item.creator !== _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('username') && (item.endTime && currentTime - item.endTime > days || item.lastUsed && currentTime - item.lastUsed > days)) {
+            if (item.creator !== _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('username') && (item.endTime && currentTime - item.endTime > days || item.lastUsed && currentTime - item.lastUsed > days)) {
               delete toSave.giveaways[code];
             }
           }
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanSgCommentHistory')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanSgCommentHistory_days') * 86400000;
-        let items = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('sgCommentHistory', '[]'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanSgCommentHistory')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanSgCommentHistory_days') * 86400000;
+        let items = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('sgCommentHistory', '[]'));
         toSave.sgCommentHistory = [];
         items.forEach(item => {
           if (currentTime - item.timestamp <= days) {
@@ -35725,32 +35925,32 @@ function loadDataCleaner(isPopup) {
           }
         });
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTickets')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTickets_days') * 86400000;
-        toSave.tickets = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('tickets', '{}'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTickets')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTickets_days') * 86400000;
+        toSave.tickets = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('tickets', '{}'));
         for (let code in toSave.tickets) {
           if (toSave.tickets.hasOwnProperty(code)) {
             let item = toSave.tickets[code];
-            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
+            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
               delete toSave.tickets[code];
             }
           }
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTrades')) {
-        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanTrades_days') * 86400000;
-        toSave.trades = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('trades', '{}'));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTrades')) {
+        let days = _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanTrades_days') * 86400000;
+        toSave.trades = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('trades', '{}'));
         for (let code in toSave.trades) {
           if (toSave.trades.hasOwnProperty(code)) {
             let item = toSave.trades[code];
-            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
+            if (item.author !== _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('username') && item.lastUsed && currentTime - item.lastUsed > days) {
               delete toSave.trades[code];
             }
           }
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cleanDuplicates')) {
-        toSave.users = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('users', `{"steamIds":{},"users":{}}`));
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('cleanDuplicates')) {
+        toSave.users = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('users', `{"steamIds":{},"users":{}}`));
         for (let id in toSave.users.users) {
           if (toSave.users.users.hasOwnProperty(id)) {
             let giveaways = toSave.users.users[id].giveaways;
@@ -35773,15 +35973,15 @@ function loadDataCleaner(isPopup) {
           toSave[key] = JSON.stringify(toSave[key]);
         }
       }
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValues(toSave);
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValues(toSave);
       const newSize = await manageData(dm, STORAGE_TYPES.COMPUTER, true);
-      const successPopup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+      const successPopup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
         icon: 'fa-check',
-        title: _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("fragment", null, "Success! The selected data was cleaned.", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("br", null), "Size before cleaning:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("span", {
+        title: _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("fragment", null, "Success! The selected data was cleaned.", _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("br", null), "Size before cleaning:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("span", {
           className: "esgst-bold"
-        }, _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(oldSize)), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("br", null), "Size after cleaning:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("span", {
+        }, _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(oldSize)), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("br", null), "Size after cleaning:", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("span", {
           className: "esgst-bold"
-        }, _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(newSize)), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("br", null), `${Math.round((100 - newSize / oldSize * 100) * 100) / 100}% reduction`)
+        }, _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(newSize)), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("br", null), `${Math.round((100 - newSize / oldSize * 100) * 100) / 100}% reduction`)
       });
       successPopup.open();
     }
@@ -35800,23 +36000,23 @@ async function manageData(dm, storageType, space, callback) {
     if (dm.type === 'import') {
       const stringified = [];
       for (const key of Object.keys(dm.data)) {
-        if (_lib_jsUtils__WEBPACK_IMPORTED_MODULE_15__["Utils"].is(dm.data[key], 'object') || Array.isArray(dm.data[key])) {
+        if (_lib_jsUtils__WEBPACK_IMPORTED_MODULE_17__["Utils"].is(dm.data[key], 'object') || Array.isArray(dm.data[key])) {
           dm.data[key] = JSON.stringify(dm.data[key]);
           stringified.push(key);
         }
       }
-      await _class_PersistentStorage__WEBPACK_IMPORTED_MODULE_8__["persistentStorage"].upgrade(dm.data, dm.data.v, true);
+      await _class_PersistentStorage__WEBPACK_IMPORTED_MODULE_10__["persistentStorage"].upgrade(dm.data, dm.data.v, true);
       for (const key of stringified) {
         dm.data[key] = JSON.parse(dm.data[key]);
       }
     } else if (dm.type === 'export') {
-      data.v = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('v');
+      data.v = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('v');
     }
   }
   for (let i = 0, n = dm.options.length; i < n; i++) {
     let option = dm.options[i];
     let optionKey = option.key;
-    if (!option.check || !dm.autoBackup && !space && !_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}`)) {
+    if (!option.check || !dm.autoBackup && !space && !_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}`)) {
       continue;
     }
     let values = null;
@@ -35825,32 +36025,51 @@ async function manageData(dm, storageType, space, callback) {
     switch (optionKey) {
       case 'decryptedGiveaways':
       case 'settings':
-        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '{}'));
+        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '{}'));
         if (!space) {
           if (dm.import) {
             let newData = dm.data[optionKey];
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                 mergedData = data[optionKey];
                 for (let newDataKey in newData) {
                   if (newData.hasOwnProperty(newDataKey)) {
                     mergedData[newDataKey] = newData[newDataKey];
                   }
                 }
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
+                mergedData = newData;
+              }
+              if (optionKey === 'settings') {
+                mergedData = materializeSettingsDefaults(mergedData);
+              }
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+              if (optionKey === 'settings') {
+                var _mergedData$useCustom;
+                const useCustomAdaReqLim = (_mergedData$useCustom = mergedData.useCustomAdaReqLim_sg) !== null && _mergedData$useCustom !== void 0 ? _mergedData$useCustom : mergedData.useCustomAdaReqLim;
+                if (typeof useCustomAdaReqLim !== 'undefined') {
+                  _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].set('useCustomAdaReqLim', useCustomAdaReqLim);
+                }
+                for (const key of ['default', 'minute50', 'minute75', 'hourly75', 'daily75']) {
+                  const threshold = mergedData[`customAdaReqLim_${key}`];
+                  if (typeof threshold !== 'undefined') {
+                    _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].set(`customAdaReqLim_${key}`, threshold);
+                  }
+                }
+                await _browser__WEBPACK_IMPORTED_MODULE_20__["browser"].runtime.sendMessage({
+                  action: 'update_adareqlim'
+                });
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue(optionKey);
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue(optionKey);
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '{}')}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '{}')}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
@@ -35897,7 +36116,7 @@ async function manageData(dm, storageType, space, callback) {
           };
         }
         data[optionKey] = {};
-        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '{}'));
+        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '{}'));
         sizes = {
           ct: 0,
           df: 0,
@@ -35924,7 +36143,7 @@ async function manageData(dm, storageType, space, callback) {
             let toExport = false;
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
-                if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
+                if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
                   toDelete += 1;
                 }
                 for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
@@ -35934,7 +36153,7 @@ async function manageData(dm, storageType, space, callback) {
                     if (value !== 'main') {
                       foundSub += 1;
                     }
-                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`) || value === 'main') {
+                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`) || value === 'main') {
                       newData[valueKey] = mergedDataValue;
                       if (value !== 'main') {
                         toExport = true;
@@ -35944,7 +36163,7 @@ async function manageData(dm, storageType, space, callback) {
                     sizes[value] += size;
                     sizes.total += size;
                     found = value;
-                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`) && value !== 'main') {
+                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`) && value !== 'main') {
                       deletedSub += 1;
                       delete mergedData[mergedDataKey][valueKey];
                     }
@@ -35956,14 +36175,14 @@ async function manageData(dm, storageType, space, callback) {
               sizes[found] -= 1;
               sizes.total -= 1;
             }
-            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
+            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
               data[optionKey][mergedDataKey] = newData;
               mainFound = true;
             }
             let size = `"${mergedDataKey}":{},`.length;
             sizes.main += size;
             sizes.total += size;
-            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
+            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
               delete mergedData[mergedDataKey];
             }
           }
@@ -35979,8 +36198,8 @@ async function manageData(dm, storageType, space, callback) {
                   }
                   for (let value in values) {
                     if (values.hasOwnProperty(value)) {
-                      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
-                        if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+                      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
+                        if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                           for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
                             let valueKey = values[value][j];
                             switch (valueKey) {
@@ -36026,10 +36245,10 @@ async function manageData(dm, storageType, space, callback) {
                   }
                 }
               }
-              await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
           }
         }
         if (mainFound) {
@@ -36044,49 +36263,49 @@ async function manageData(dm, storageType, space, callback) {
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
                 if (dm.switches[`${optionKey}_${value}`]) {
-                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes[value]);
+                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes[value]);
                 }
               }
             }
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes.total);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes.total);
           }
           totalSize += sizes.total;
         }
         break;
       case 'customTheme':
-        data.customTheme = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('customTheme', '');
+        data.customTheme = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('customTheme', '');
         if (!space && dm.delete) {
-          await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue('customTheme');
+          await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue('customTheme');
         }
         if (!dm.autoBackup) {
           let size = data.customTheme.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
       case 'emojis':
-        data.emojis = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('emojis', '[]'));
+        data.emojis = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('emojis', '[]'));
         if (!space) {
           if (dm.import) {
             let newData = JSON.stringify(dm.data.emojis);
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('emojis', JSON.stringify(Array.from(new Set(data.emojis.concat(JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.fixEmojis(newData)))))));
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('emojis', JSON.stringify(Array.from(new Set(data.emojis.concat(JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.fixEmojis(newData)))))));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('emojis', _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.fixEmojis(newData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('emojis', _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.fixEmojis(newData));
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue('emojis');
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue('emojis');
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, `"[]"`)}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, `"[]"`)}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
@@ -36094,12 +36313,12 @@ async function manageData(dm, storageType, space, callback) {
       case 'templates':
       case 'savedReplies':
       case 'savedReplies_st':
-        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]'));
+        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]'));
         if (!space) {
           if (dm.import) {
             let newData = dm.data[optionKey];
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                 let dataKey = optionKey === 'entries' ? 'timestamp' : 'name';
                 mergedData = data[optionKey];
                 for (let j = 0, numNew = newData.length; j < numNew; ++j) {
@@ -36113,22 +36332,22 @@ async function manageData(dm, storageType, space, callback) {
                   }
                 }
                 if (optionKey === 'entries') {
-                  mergedData = _lib_jsUtils__WEBPACK_IMPORTED_MODULE_15__["Utils"].sortArray(mergedData, false, 'timestamp');
+                  mergedData = _lib_jsUtils__WEBPACK_IMPORTED_MODULE_17__["Utils"].sortArray(mergedData, false, 'timestamp');
                 }
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue(optionKey);
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue(optionKey);
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]')}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]')}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
@@ -36143,7 +36362,7 @@ async function manageData(dm, storageType, space, callback) {
           apps: {},
           subs: {}
         };
-        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('games', `{"apps":{},"subs":{}}`));
+        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('games', `{"apps":{},"subs":{}}`));
         sizes = {
           egh: 0,
           gt: 0,
@@ -36163,7 +36382,7 @@ async function manageData(dm, storageType, space, callback) {
             let toExport = false;
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
-                if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`)) {
+                if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`)) {
                   toDelete += 1;
                 }
                 for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
@@ -36173,7 +36392,7 @@ async function manageData(dm, storageType, space, callback) {
                     if (value !== 'main') {
                       foundSub += 1;
                     }
-                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`) || value === 'main') {
+                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`) || value === 'main') {
                       newData[valueKey] = newDataValue;
                       if (value !== 'main') {
                         toExport = true;
@@ -36183,7 +36402,7 @@ async function manageData(dm, storageType, space, callback) {
                     sizes[value] += size;
                     sizes.total += size;
                     found = value;
-                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`) && value !== 'main') {
+                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`) && value !== 'main') {
                       deletedSub += 1;
                       delete mergedDataValue[valueKey];
                     }
@@ -36195,14 +36414,14 @@ async function manageData(dm, storageType, space, callback) {
               sizes[found] -= 1;
               sizes.total -= 1;
             }
-            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
+            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
               data.games.apps[mergedDataKey] = newData;
               mainFound = true;
             }
             let size = `"${mergedDataKey}":{},`.length;
             sizes.main += size;
             sizes.total += size;
-            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
+            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
               delete mergedData.apps[mergedDataKey];
             }
           }
@@ -36223,7 +36442,7 @@ async function manageData(dm, storageType, space, callback) {
             let toExport = false;
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
-                if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`)) {
+                if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`)) {
                   toDelete += 1;
                 }
                 for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
@@ -36233,7 +36452,7 @@ async function manageData(dm, storageType, space, callback) {
                     if (value !== 'main') {
                       foundSub += 1;
                     }
-                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`) || value === 'main') {
+                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`) || value === 'main') {
                       newData[valueKey] = newDataValue;
                       if (value !== 'main') {
                         toExport = true;
@@ -36243,7 +36462,7 @@ async function manageData(dm, storageType, space, callback) {
                     sizes[value] += size;
                     sizes.total += size;
                     found = value;
-                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`) && value !== 'main') {
+                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`) && value !== 'main') {
                       deletedSub += 1;
                       delete mergedDataValue[valueKey];
                     }
@@ -36255,14 +36474,14 @@ async function manageData(dm, storageType, space, callback) {
               sizes[found] -= 1;
               sizes.total -= 1;
             }
-            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
+            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
               data.games.subs[mergedDataKey] = newData;
               mainFound = true;
             }
             let size = `"${mergedDataKey}":{},`.length;
             sizes.main += size;
             sizes.total += size;
-            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
+            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
               delete mergedData.subs[mergedDataKey];
             }
           }
@@ -36283,11 +36502,11 @@ async function manageData(dm, storageType, space, callback) {
                   }
                   let mergedDataValue = mergedData.apps[newDataKey];
                   for (let value in values) {
-                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`)) {
+                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`)) {
                       for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
                         let valueKey = values[value][j];
                         if (typeof newDataValue[valueKey] !== 'undefined') {
-                          if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+                          if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                             switch (valueKey) {
                               case 'entered':
                                 mergedDataValue.entered = true;
@@ -36335,11 +36554,11 @@ async function manageData(dm, storageType, space, callback) {
                   }
                   let mergedDataValue = mergedData.subs[newDataKey];
                   for (let value in values) {
-                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_games_${value}`)) {
+                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_games_${value}`)) {
                       for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
                         let valueKey = values[value][j];
                         if (typeof newDataValue[valueKey] !== 'undefined') {
-                          if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+                          if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                             switch (valueKey) {
                               case 'entered':
                                 mergedDataValue.entered = true;
@@ -36379,10 +36598,10 @@ async function manageData(dm, storageType, space, callback) {
                   }
                 }
               }
-              await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('games', JSON.stringify(mergedData));
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('games', JSON.stringify(mergedData));
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('games', JSON.stringify(mergedData));
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('games', JSON.stringify(mergedData));
           }
         }
         if (!dm.autoBackup) {
@@ -36393,11 +36612,11 @@ async function manageData(dm, storageType, space, callback) {
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
                 if (dm.switches[`${optionKey}_${value}`]) {
-                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes[value]);
+                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes[value]);
                 }
               }
             }
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes.total);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes.total);
           }
           totalSize += sizes.total;
         }
@@ -36408,7 +36627,7 @@ async function manageData(dm, storageType, space, callback) {
           gpt: ['tags'],
           sgg: ['stickied']
         };
-        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]'));
+        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]'));
         if (!Array.isArray(mergedData)) {
           let temp = [];
           for (let key in mergedData) {
@@ -36435,7 +36654,7 @@ async function manageData(dm, storageType, space, callback) {
           let toExport = false;
           for (let value in values) {
             if (values.hasOwnProperty(value)) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
                 toDelete += 1;
               }
               for (let k = 0, numValues = values[value].length; k < numValues; ++k) {
@@ -36446,7 +36665,7 @@ async function manageData(dm, storageType, space, callback) {
                     if (value !== 'main') {
                       foundSub += 1;
                     }
-                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`) || value === 'main') {
+                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`) || value === 'main') {
                       newData[valueKey] = mergedDataValue;
                       if (value !== 'main') {
                         toExport = true;
@@ -36456,7 +36675,7 @@ async function manageData(dm, storageType, space, callback) {
                     sizes[value] += size;
                     sizes.total += size;
                     found = value;
-                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`) && value !== 'main') {
+                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`) && value !== 'main') {
                       deletedSub += 1;
                       delete mergedData[j][valueKey];
                     }
@@ -36469,14 +36688,14 @@ async function manageData(dm, storageType, space, callback) {
             sizes[found] -= 1;
             sizes.total -= 1;
           }
-          if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
+          if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
             data[optionKey].push(newData);
             mainFound = true;
           }
           let size = `{},`.length;
           sizes.main += size;
           sizes.total += size;
-          if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
+          if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
             mergedData.pop();
           }
         }
@@ -36509,7 +36728,7 @@ async function manageData(dm, storageType, space, callback) {
                 }
                 for (let value in values) {
                   if (values.hasOwnProperty(value)) {
-                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
+                    if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_${value}`)) {
                       for (let k = 0, numValues = values[value].length; k < numValues; ++k) {
                         let valueKey = values[value][k];
                         switch (valueKey) {
@@ -36535,10 +36754,10 @@ async function manageData(dm, storageType, space, callback) {
                   }
                 }
               }
-              await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
           }
         }
         if (!dm.autoBackup) {
@@ -36549,23 +36768,23 @@ async function manageData(dm, storageType, space, callback) {
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
                 if (dm.switches[`${optionKey}_${value}`]) {
-                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes[value]);
+                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes[value]);
                 }
               }
             }
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes.total);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes.total);
           }
           totalSize += sizes.total;
         }
         break;
       case 'rerolls':
       case 'stickiedCountries':
-        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]'));
+        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]'));
         if (!space) {
           if (dm.import) {
             let newData = dm.data[optionKey];
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                 mergedData = data[optionKey];
                 for (let j = 0, numNew = newData.length; j < numNew; ++j) {
                   let newDataValue = newData[j];
@@ -36573,30 +36792,30 @@ async function manageData(dm, storageType, space, callback) {
                     mergedData.push(newDataValue);
                   }
                 }
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue(optionKey);
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue(optionKey);
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]')}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]')}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
       case 'sgCommentHistory':
-        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]'));
+        data[optionKey] = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]'));
         if (!space) {
           if (dm.import) {
             let newData = dm.data[optionKey];
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                 mergedData = [];
                 let oldData = data[optionKey];
                 let j = 0;
@@ -36635,20 +36854,20 @@ async function manageData(dm, storageType, space, callback) {
                   }
                   k += 1;
                 }
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(mergedData));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue(optionKey, JSON.stringify(newData));
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue(optionKey);
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue(optionKey);
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '[]')}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '[]')}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
@@ -36668,7 +36887,7 @@ async function manageData(dm, storageType, space, callback) {
           steamIds: {},
           users: {}
         };
-        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('users', `{"steamIds":{},"users":{}}`));
+        mergedData = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('users', `{"steamIds":{},"users":{}}`));
         sizes = {
           cdr: 0,
           giveaways: 0,
@@ -36694,7 +36913,7 @@ async function manageData(dm, storageType, space, callback) {
             let toExport = false;
             for (let value in values) {
               if (values.hasOwnProperty(value)) {
-                if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_users_${value}`)) {
+                if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_users_${value}`)) {
                   toDelete += 1;
                 }
                 for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
@@ -36703,7 +36922,7 @@ async function manageData(dm, storageType, space, callback) {
                     if (value !== 'main') {
                       foundSub += 1;
                     }
-                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_users_${value}`) || value === 'main') {
+                    if (dm.autoBackup || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_users_${value}`) || value === 'main') {
                       newData[valueKey] = mergedDataValue[valueKey];
                       if (value !== 'main') {
                         toExport = true;
@@ -36713,7 +36932,7 @@ async function manageData(dm, storageType, space, callback) {
                     sizes[value] += size;
                     sizes.total += size;
                     found = value;
-                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_users_${value}`) && value !== 'main') {
+                    if (!space && dm.delete && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_users_${value}`) && value !== 'main') {
                       deletedSub += 1;
                       delete mergedDataValue[valueKey];
                     }
@@ -36734,7 +36953,7 @@ async function manageData(dm, storageType, space, callback) {
             if (username) {
               size += `"username":"${username}","${username}":"${mergedDataKey}",`.length;
             }
-            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
+            if (dm.autoBackup || toExport || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`)) {
               if (id) {
                 newData.id = id;
               }
@@ -36749,7 +36968,7 @@ async function manageData(dm, storageType, space, callback) {
             size += `"${mergedDataKey}":{},`.length;
             sizes.main += size;
             sizes.total += size;
-            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
+            if (!space && dm.delete && (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_${optionKey}_main`) && foundSub === deletedSub || toDelete === Object.keys(values).length)) {
               delete mergedData.steamIds[mergedDataValue.username];
               delete mergedData.users[mergedDataKey];
             }
@@ -36780,11 +36999,11 @@ async function manageData(dm, storageType, space, callback) {
                   let mergedDataValue = mergedData.users[newDataKey];
                   for (let value in values) {
                     if (values.hasOwnProperty(value)) {
-                      if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get(`${dm.type}_users_${value}`)) {
+                      if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get(`${dm.type}_users_${value}`)) {
                         for (let j = 0, numValues = values[value].length; j < numValues; ++j) {
                           let valueKey = values[value][j];
                           if (newDataValue[valueKey]) {
-                            if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+                            if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                               switch (valueKey) {
                                 case 'whitelisted':
                                 case 'whitelistedDate':
@@ -36794,7 +37013,7 @@ async function manageData(dm, storageType, space, callback) {
                                   mergedDataValue[valueKey] = newDataValue[valueKey];
                                   break;
                                 case 'notes':
-                                  mergedDataValue.notes = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.removeDuplicateNotes(mergedDataValue.notes ? `${mergedDataValue.notes}\n\n${newDataValue.notes}` : newDataValue.notes);
+                                  mergedDataValue.notes = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.removeDuplicateNotes(mergedDataValue.notes ? `${mergedDataValue.notes}\n\n${newDataValue.notes}` : newDataValue.notes);
                                   break;
                                 case 'tags':
                                   if (mergedDataValue.tags) {
@@ -36843,10 +37062,10 @@ async function manageData(dm, storageType, space, callback) {
                   }
                 }
               }
-              await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('users', JSON.stringify(mergedData));
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('users', JSON.stringify(mergedData));
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('users', JSON.stringify(mergedData));
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('users', JSON.stringify(mergedData));
           }
         }
         if (!dm.autoBackup) {
@@ -36857,22 +37076,22 @@ async function manageData(dm, storageType, space, callback) {
             for (const value in values) {
               if (values.hasOwnProperty(value)) {
                 if (dm.switches[`${optionKey}_${value}`]) {
-                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes[value]);
+                  dm.switches[`${optionKey}_${value}`].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes[value]);
                 }
               }
             }
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(sizes.total);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(sizes.total);
           }
           totalSize += sizes.total;
         }
         break;
       case 'winners':
-        data.winners = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue('winners', '{}'));
+        data.winners = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue('winners', '{}'));
         if (!space) {
           if (dm.import) {
             let newData = dm.data.winners;
             if (newData) {
-              if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('importAndMerge')) {
+              if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('importAndMerge')) {
                 mergedData = data.winners;
                 for (let newDataKey in newData) {
                   if (newData.hasOwnProperty(newDataKey)) {
@@ -36887,20 +37106,20 @@ async function manageData(dm, storageType, space, callback) {
                     }
                   }
                 }
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('winners', JSON.stringify(mergedData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('winners', JSON.stringify(mergedData));
               } else {
-                await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.setValue('winners', JSON.stringify(newData));
+                await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.setValue('winners', JSON.stringify(newData));
               }
             }
           } else if (dm.delete) {
-            await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.delValue('winners');
+            await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.delValue('winners');
           }
         }
         if (!dm.autoBackup) {
-          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getValue(optionKey, '{}')}}`.length;
+          let size = `{"${optionKey}":${_class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getValue(optionKey, '{}')}}`.length;
           totalSize += size;
           if (dm.switches) {
-            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(size);
+            dm.switches[optionKey].size.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(size);
           }
         }
         break;
@@ -36909,7 +37128,7 @@ async function manageData(dm, storageType, space, callback) {
     }
   }
   if (!dm.autoBackup && dm.computerSpaceCount) {
-    dm.computerSpaceCount.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.convertBytes(totalSize);
+    dm.computerSpaceCount.textContent = _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.convertBytes(totalSize);
   }
   if (space) {
     if (space.close) {
@@ -36917,41 +37136,41 @@ async function manageData(dm, storageType, space, callback) {
     }
     return totalSize;
   } else {
-    if (dm.type === 'export' || _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackup')) {
-      if (storageType === STORAGE_TYPES.DROPBOX || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex') === 1) {
-        _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].DROPBOX, data, dm, callback);
-      } else if (storageType === STORAGE_TYPES.GOOGLE_DRIVE || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex') === 2) {
-        _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].GOOGLEDRIVE, data, dm, callback);
-      } else if (storageType === STORAGE_TYPES.ONEDRIVE || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex') === 3) {
-        _CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_16__["CloudStorage"].ONEDRIVE, data, dm, callback);
-      } else if (storageType === STORAGE_TYPES.COMPUTER || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('exportBackupIndex') === 0) {
-        const name = `${_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('askFileName') ? window.prompt(`Enter the name of the file:`, `esgst_data_${new Date().toISOString().replace(/:/g, '_')}`) : `esgst_data_${new Date().toISOString().replace(/:/g, '_')}`}`;
+    if (dm.type === 'export' || _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackup')) {
+      if (storageType === STORAGE_TYPES.DROPBOX || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex') === 1) {
+        _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].DROPBOX, data, dm, callback);
+      } else if (storageType === STORAGE_TYPES.GOOGLE_DRIVE || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex') === 2) {
+        _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].GOOGLEDRIVE, data, dm, callback);
+      } else if (storageType === STORAGE_TYPES.ONEDRIVE || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex') === 3) {
+        _CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].manage(_CloudStorage__WEBPACK_IMPORTED_MODULE_18__["CloudStorage"].ONEDRIVE, data, dm, callback);
+      } else if (storageType === STORAGE_TYPES.COMPUTER || dm.type !== 'export' && _class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('exportBackupIndex') === 0) {
+        const name = `${_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('askFileName') ? window.prompt(`Enter the name of the file:`, `esgst_data_${new Date().toISOString().replace(/:/g, '_')}`) : `esgst_data_${new Date().toISOString().replace(/:/g, '_')}`}`;
         if (name === 'null') {
           callback();
           return;
         }
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('backupZip')) {
-          await _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.downloadZip(data, `${name}.json`, `${name}.zip`);
+        if (_class_Settings__WEBPACK_IMPORTED_MODULE_12__["Settings"].get('backupZip')) {
+          await _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.downloadZip(data, `${name}.json`, `${name}.zip`);
         } else {
-          _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.downloadFile(JSON.stringify(data), `${name}.json`);
+          _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.downloadFile(JSON.stringify(data), `${name}.json`);
         }
         if (!dm.autoBackup) {
-          _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(dm.message, `Data ${dm.pastTense} with success!`);
+          _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(dm.message, `Data ${dm.pastTense} with success!`);
         }
         callback();
       } else {
         const stringifiedData = JSON.stringify(data);
-        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_9__["Popup"]({
+        const popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_11__["Popup"]({
           isTemp: true
         });
-        popup.setScrollable(_class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("div", {
+        popup.setScrollable(_class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("div", {
           className: "markdown"
-        }, _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.getCopyIcon(stringifiedData), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("pre", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("code", null, stringifiedData))));
+        }, _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.getCopyIcon(stringifiedData), _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("pre", null, _class_DOM__WEBPACK_IMPORTED_MODULE_7__["DOM"].element("code", null, stringifiedData))));
         popup.onClose = callback;
         popup.open();
       }
     } else {
-      _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].common.createFadeMessage(dm.message, `Data ${dm.pastTense} with success!`);
+      _class_Shared__WEBPACK_IMPORTED_MODULE_13__["Shared"].common.createFadeMessage(dm.message, `Data ${dm.pastTense} with success!`);
       callback();
     }
   }
@@ -39879,7 +40098,7 @@ class CloudStorage {
             }
             return;
           }
-          _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.modules.manageData(dm, false, false, false, false, callback);
+          _class_Shared__WEBPACK_IMPORTED_MODULE_11__["Shared"].esgst.modules.manageData(dm, service, false, callback);
         });
       });
       item.lastElementChild.addEventListener('click', () => {
@@ -40779,7 +40998,7 @@ class GiveawaysBlacklistGiveawayLoader extends _class_Module__WEBPACK_IMPORTED_M
         let responseHtml = null;
         try {
           const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].get(giveaway.url || `/giveaway/${giveaway.code}/`, {
-            loggedOut: true
+            ...(await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].getLoggedOutOptions())
           });
           responseHtml = response.html;
         } catch (_unused) {}
@@ -40847,7 +41066,7 @@ class GiveawaysBlacklistGiveawayLoader extends _class_Module__WEBPACK_IMPORTED_M
     let responseHtml;
     try {
       const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].get(window.location.pathname, {
-        loggedOut: true
+        ...(await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_2__["FetchRequest"].getLoggedOutOptions())
       });
       responseHtml = response.html;
     } catch (_unused2) {}
@@ -41059,12 +41278,15 @@ class DiscussionsOldActiveDiscussionsDesign extends _class_Module__WEBPACK_IMPOR
     };
   }
   async init() {
-    if (!(this.esgst.giveawaysPath || this.esgst.commentsPath || this.esgst.activeDiscussions)) {
+    if (!(this.esgst.giveawaysPath || this.esgst.commentsPath || this.esgst.activeDiscussions) || !this.esgst.activeDiscussions) {
       return;
     }
     await this.oadd_load();
   }
   async oadd_load(refresh, callback) {
+    if (!this.esgst.activeDiscussions) {
+      return;
+    }
     let deals, dealsRows, dealsSwitch, discussions, discussionsRows, discussionsSwitch, i, j, response1Html, response2Html, revisedElements;
     let NumToDisplay = 7;
     if (_class_Settings__WEBPACK_IMPORTED_MODULE_3__["Settings"].get(`adtd_sg`).enabled) {
@@ -45866,7 +46088,7 @@ class GiveawaysGiveawaysSorter extends _class_Module__WEBPACK_IMPORTED_MODULE_2_
       }), ") to the main page heading of any", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("a", {
         href: "https://www.steamgifts.com/giveaways"
       }, "giveaways"), "/", _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("a", {
-        href: "https://www.steamgifts.com/entered"
+        href: "https://www.steamgifts.com/giveaways/entered"
       }, "entered"), "/", _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("a", {
         href: "https://www.steamgifts.com/group/SJ7Bu/"
       }, "group"), "/", _class_DOM__WEBPACK_IMPORTED_MODULE_1__["DOM"].element("a", {
@@ -46267,6 +46489,15 @@ class GiveawaysGiveawayBookmarks extends _class_Module__WEBPACK_IMPORTED_MODULE_
         gb_se: {
           name: 'Show the button for entered giveaways.',
           sg: true
+        },
+        gb_amt: {
+          description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Sets the number of bookmarked giveaways to display on load/scroll."), _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Each bookmark counts as two requests towards steamgifts request limits.")),
+          inputItems: [{
+            id: 'gb_amount',
+            prefix: `Amount of bookmarked giveaways to fetch: `
+          }],
+          name: 'Display Limit',
+          sg: true
         }
       },
       id: 'gb',
@@ -46474,14 +46705,7 @@ class GiveawaysGiveawayBookmarks extends _class_Module__WEBPACK_IMPORTED_MODULE_
         bookmarked
       })
     }).insert(this.heading.nodes.outer, 'beforeend');
-    const isGridView = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('gv');
-    const batchSize = isGridView ? 25 : 5;
-    if (isGridView) {
-      const gridHeight = (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('cgb') ? 325 : 310) + (Number(_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('gv_spacing')) || 0) * 7;
-      context.style.maxHeight = `${gridHeight}px`;
-    } else {
-      context.style.maxHeight = '575px';
-    }
+    const batchSize = Number(_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('gb_amount')) || 10;
     context.style.overflowY = 'auto';
     const loadMoreButton = _components_Button__WEBPACK_IMPORTED_MODULE_12__["Button"].create([{
       color: 'green',
@@ -46494,8 +46718,6 @@ class GiveawaysGiveawayBookmarks extends _class_Module__WEBPACK_IMPORTED_MODULE_
             i = value;
             if (i >= n) {
               loadMoreButton.destroy();
-            } else if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('es_gb') && context.scrollHeight <= context.offsetHeight) {
-              loadMoreButton.onClick(true);
             }
             resolve();
           });
@@ -46527,8 +46749,11 @@ class GiveawaysGiveawayBookmarks extends _class_Module__WEBPACK_IMPORTED_MODULE_
     }]);
     loadMoreButton.onClick();
     if (_class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('es_gb')) {
-      context.addEventListener('scroll', () => {
-        if (context.scrollTop + context.offsetHeight >= context.scrollHeight && !loadMoreButton.isBusy && i < n) {
+      const isNewTab = _class_Settings__WEBPACK_IMPORTED_MODULE_10__["Settings"].get('gb_t');
+      const scrollElement = isNewTab ? window : context;
+      scrollElement.addEventListener('scroll', () => {
+        const isAtBottom = isNewTab ? document.documentElement.scrollHeight > window.innerHeight && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight : context.scrollHeight > context.offsetHeight && context.scrollTop + context.offsetHeight >= context.scrollHeight;
+        if (isAtBottom && !loadMoreButton.isBusy && i < n) {
           loadMoreButton.onClick();
         }
       });
@@ -51744,7 +51969,7 @@ class GiveawaysGiveawayExtractor extends _class_Module__WEBPACK_IMPORTED_MODULE_
       try {
         if (await _class_Permissions__WEBPACK_IMPORTED_MODULE_14__["permissions"].contains([['cookies']])) {
           const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/giveaway/${currentCode}/`, {
-            loggedOut: true
+            ...(await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].getLoggedOutOptions())
           });
           responseHtml = response.html;
           giveaway = await buildGiveaway(responseHtml, response.url, null, true);
@@ -59572,13 +59797,16 @@ class Tags extends _class_Module__WEBPACK_IMPORTED_MODULE_8__["Module"] {
   async tags_addButtons(items) {
     items = items.all || items;
     for (const item of items) {
+      if (!item.container || !item.tagContext || !item.tagPosition) {
+        continue;
+      }
       const obj = {
         item,
         key: this.id,
         colorSetting: _class_Settings__WEBPACK_IMPORTED_MODULE_11__["Settings"].get(`${this.id}_colors`)
       };
       if (!item.container.getElementsByClassName('esgst-tag-button')[0]) {
-        createElements(item.tagContext, item.tagPosition, [{
+        const button = createElements(item.tagContext, item.tagPosition, [{
           attributes: {
             class: 'esgst-tag-button esgst-faded',
             ['data-draggable-id']: this.id,
@@ -59596,7 +59824,8 @@ class Tags extends _class_Module__WEBPACK_IMPORTED_MODULE_8__["Module"] {
             },
             type: 'span'
           }]
-        }]).addEventListener('click', this.tags_openPopup.bind(this, obj), true);
+        }]);
+        button === null || button === void 0 || button.addEventListener('click', this.tags_openPopup.bind(this, obj), true);
       }
       if (item.saved && item.saved.tags) {
         item.tags = item.saved.tags.map(tag => tag.toLowerCase());
