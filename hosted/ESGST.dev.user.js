@@ -4,7 +4,7 @@
 // @namespace https://SquishedPotatoe.github.io/esgst
 // @description Enhances SteamGifts and SteamTrades by adding some cool features to them.
 // @icon https://github.com/JustArchi/ESGST/raw/master/src/assets/images/icon.png
-// @version 8.12.6
+// @version 8.12.8
 // @author rafaelgomesxyz
 // @contributor Revadike
 // @updateURL https://github.com/JustArchi/ESGST/raw/master/hosted/ESGST.meta.js
@@ -22,7 +22,7 @@
 // @connect github.com
 // @connect googleapis.com
 // @connect graph.microsoft.com
-// @connect isthereanydeal.com
+// @connect api.gg.deals
 // @connect esgst.rafaelgomes.xyz
 // @connect raw.githubusercontent.com
 // @connect steam-tracker.com
@@ -12896,6 +12896,7 @@ class _Settings {
       cgb_g_bgColor: '#d8f3dc',
       cgb_w_bgColor: '#d8e6f6',
       cgb_sgt_bgColor: '#d8f3e9',
+      cgb_wl_bgColor: '#3498db',
       qgs_index: 0,
       lpv_barColor: '#609f60',
       lpv_projectedBarColor: `rgba(96, 159, 96, 0.5)`,
@@ -13204,6 +13205,10 @@ class _Settings {
       avatar: '',
       steamId: '',
       steamApiKey: '',
+      ggDealsApiKey: '',
+      ggdi_sg: false,
+      ggdi_index_0: 0,
+      ggdi_index_1: 18,
       username_sg: '',
       username_st: '',
       registrationDate_sg: 0,
@@ -13573,7 +13578,7 @@ class _Settings {
       sk_hideGiveaway: 'altKey + h',
       sk_giveawayEntry: 'ctrlKey + enter',
       sk_creator: 'altKey + c',
-      sk_replyBox: 'ctrlKey +  ',
+      sk_replyBox: 'ctrlKey + r',
       sk_replyUser: 'altKey + u',
       sk_submitReply: 'ctrlKey + enter',
       sks_exportKeys: false,
@@ -17175,7 +17180,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _Groups_GroupHighlighter__WEBPACK_IMPORTED_MODULE_124__ = __webpack_require__(397);
 /* harmony import */ var _Giveaways_GiveawayPopup__WEBPACK_IMPORTED_MODULE_125__ = __webpack_require__(398);
 /* harmony import */ var _Giveaways_EnterLeaveGiveawayButton__WEBPACK_IMPORTED_MODULE_126__ = __webpack_require__(399);
-/* harmony import */ var _Giveaways_IsThereAnyDealInfo__WEBPACK_IMPORTED_MODULE_127__ = __webpack_require__(400);
+/* harmony import */ var _Giveaways_GGDealsInfo__WEBPACK_IMPORTED_MODULE_127__ = __webpack_require__(400);
 /* harmony import */ var _Giveaways_UnhideGiveawayButton__WEBPACK_IMPORTED_MODULE_128__ = __webpack_require__(401);
 /* harmony import */ var _Games_HideInTableButton__WEBPACK_IMPORTED_MODULE_129__ = __webpack_require__(402);
 /* harmony import */ var _Giveaways_OneClickHideGiveawayButton__WEBPACK_IMPORTED_MODULE_130__ = __webpack_require__(403);
@@ -17509,7 +17514,7 @@ const modules = {
   groupsGroupHighlighter: _Groups_GroupHighlighter__WEBPACK_IMPORTED_MODULE_124__["groupsGroupHighlighter"],
   giveawaysGiveawayPopup: _Giveaways_GiveawayPopup__WEBPACK_IMPORTED_MODULE_125__["giveawaysGiveawayPopup"],
   giveawaysEnterLeaveGiveawayButton: _Giveaways_EnterLeaveGiveawayButton__WEBPACK_IMPORTED_MODULE_126__["giveawaysEnterLeaveGiveawayButton"],
-  giveawaysIsThereAnyDealInfo: _Giveaways_IsThereAnyDealInfo__WEBPACK_IMPORTED_MODULE_127__["giveawaysIsThereAnyDealInfo"],
+  giveawaysGGDealsInfo: _Giveaways_GGDealsInfo__WEBPACK_IMPORTED_MODULE_127__["giveawaysGGDealsInfo"],
   giveawaysUnhideGiveawayButton: _Giveaways_UnhideGiveawayButton__WEBPACK_IMPORTED_MODULE_128__["giveawaysUnhideGiveawayButton"],
   gamesHideInTableButton: _Games_HideInTableButton__WEBPACK_IMPORTED_MODULE_129__["gamesHideInTableButton"],
   giveawaysOneClickHideGiveawayButton: _Giveaways_OneClickHideGiveawayButton__WEBPACK_IMPORTED_MODULE_130__["giveawaysOneClickHideGiveawayButton"],
@@ -22793,7 +22798,7 @@ class Common extends _class_Module__WEBPACK_IMPORTED_MODULE_20__["Module"] {
         description: 'Visit the discussion page.',
         icon: 'fa fa-fw fa-comments icon-green green',
         name: 'Discussion',
-        url: 'https://www.steamgifts.com/discussion/TDyzv/'
+        url: 'https://www.steamgifts.com/discussion/7buEd/'
       }, {
         description: 'Visit / join the Steam group.',
         icon: 'fa fa-fw fa-steam icon-green green',
@@ -28364,12 +28369,12 @@ class Permissions {
         },
         values: ['*://*.api.imgur.com/*']
       },
-      isThereAnyDeal: {
+      ggDeals: {
         isOrigin: true,
         messages: {
-          itadi: 'Required by IsThereAnyDeal Info to retrieve the deals.'
+          ggdi: 'Required by GG.deals Info to retrieve game prices.'
         },
-        values: ['*://*.isthereanydeal.com/*']
+        values: ['*://api.gg.deals/*']
       },
       oneDrive: {
         isOrigin: true,
@@ -31393,12 +31398,12 @@ class SettingsModule {
       let containerr = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
         className: "esgst-sm-additional-option"
       });
-      if (ID.match(/^(chfl|sk_)/)) {
+      if (ID.match(/^(chfl|sk_)/) && !Array.isArray(Feature.inputItems)) {
         Feature.inputItems = [{
           event: 'keydown',
           id: Feature.inputItems,
           shortcutKey: true,
-          prefix: `Enter the key combo you want to use for this task: `
+          prefix: `Enter the key or key combination you want to use for this task: `
         }];
       } else if (ID.match(/^hr_.+_s$/)) {
         Feature.inputItems = [{
@@ -31407,6 +31412,9 @@ class SettingsModule {
         }];
       }
       Feature.inputItems.forEach(item => {
+        if (ID === 'chfl' && item.id === 'chfl_key' && typeof _class_Settings__WEBPACK_IMPORTED_MODULE_14__["Settings"].get(item.id) === 'undefined') {
+          _class_Settings__WEBPACK_IMPORTED_MODULE_14__["Settings"].set(item.id, _class_Settings__WEBPACK_IMPORTED_MODULE_14__["Settings"].defaultValues[item.id]);
+        }
         const children = [];
         const attributes = item.attributes || {};
         if (item.play) {
@@ -32852,21 +32860,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_6__);
 /* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(107);
 /* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_7__);
-/* harmony import */ var date_fns_formatDistanceStrict__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(244);
-/* harmony import */ var _class_Checkbox__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(248);
-/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(208);
-/* harmony import */ var _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(210);
-/* harmony import */ var _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(145);
-/* harmony import */ var _class_Lock__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(211);
-/* harmony import */ var _class_Logger__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(212);
-/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(223);
-/* harmony import */ var _class_Popup__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(213);
-/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(146);
-/* harmony import */ var _class_Shared__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(155);
-/* harmony import */ var _components_Button__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(214);
-/* harmony import */ var _components_NotificationBar__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(220);
-/* harmony import */ var _components_PageHeading__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(226);
-/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(152);
+/* harmony import */ var date_fns_format__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(170);
+/* harmony import */ var date_fns_formatDistanceStrict__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(244);
+/* harmony import */ var _class_Checkbox__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(248);
+/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(208);
+/* harmony import */ var _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(210);
+/* harmony import */ var _class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(145);
+/* harmony import */ var _class_Lock__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(211);
+/* harmony import */ var _class_Logger__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(212);
+/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(223);
+/* harmony import */ var _class_Popup__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(213);
+/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(146);
+/* harmony import */ var _class_Shared__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(155);
+/* harmony import */ var _components_Button__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(214);
+/* harmony import */ var _components_NotificationBar__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(220);
+/* harmony import */ var _components_PageHeading__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(226);
+/* harmony import */ var _lib_jsUtils__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(152);
+
 
 
 
@@ -32964,7 +32974,7 @@ const SYNC_KEYS = {
   }
 };
 async function runSilentSync(parameters) {
-  const button = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].header.addButtonContainer({
+  const button = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].header.addButtonContainer({
     buttonIcon: 'fa fa-refresh fa-spin',
     buttonName: 'ESGST Sync',
     isActive: true,
@@ -32972,19 +32982,19 @@ async function runSilentSync(parameters) {
     side: 'right'
   });
   button.nodes.buttonIcon.title = 'ESGST is syncing your data... Please do not close this window.';
-  _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.parameters = {
-    ..._class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.parameters,
-    ..._lib_jsUtils__WEBPACK_IMPORTED_MODULE_22__["Utils"].getQueryParams(`?autoSync=true&${parameters.replace(/&$/, '')}`)
+  _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.parameters = {
+    ..._class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.parameters,
+    ..._lib_jsUtils__WEBPACK_IMPORTED_MODULE_23__["Utils"].getQueryParams(`?autoSync=true&${parameters.replace(/&$/, '')}`)
   };
   try {
     const syncer = await setSync(false, true);
     button.nodes.outer.addEventListener('click', () => syncer.popup.open());
-    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = true;
+    _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isSyncing = true;
     await sync(syncer);
   } catch (error) {
     console.error('[ESGST] Automatic sync failed:', error);
   } finally {
-    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing = false;
+    _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isSyncing = false;
     button.nodes.outer.classList.remove('nav__button-container--active');
     button.nodes.outer.classList.add('nav__button-container--inactive');
     button.nodes.buttonIcon.className = 'fa fa-check';
@@ -33010,56 +33020,56 @@ function getDependencies(syncer, feature, id) {
 async function setSync(isPopup = false, isSilent = false) {
   let syncer = {};
   syncer.canceled = false;
-  syncer.isSilent = isSilent || _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isFirstRun;
-  if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.parameters.autoSync) {
-    syncer.parameters = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.parameters;
+  syncer.isSilent = isSilent || _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isFirstRun;
+  if (_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.parameters.autoSync) {
+    syncer.parameters = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.parameters;
   }
   let containerr = null;
   let context = null;
   let popup = null;
   if (isPopup || syncer.isSilent) {
-    syncer.popup = popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_16__["Popup"]({
+    syncer.popup = popup = new _class_Popup__WEBPACK_IMPORTED_MODULE_17__["Popup"]({
       addScrollable: 'left',
       settings: true
     });
     containerr = popup.description;
     context = popup.scrollable;
-    if (!_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isFirstRun && (!syncer.isSilent || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('openAutoSyncPopup'))) {
+    if (!_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isFirstRun && (!syncer.isSilent || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('openAutoSyncPopup'))) {
       popup.open();
     }
   } else {
-    containerr = context = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.sidebar.nextElementSibling;
+    containerr = context = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.sidebar.nextElementSibling;
     containerr.innerHTML = '';
     context.setAttribute('data-esgst-popup', 'true');
   }
-  const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_21__["PageHeading"].create('sync', [{
+  const heading = _components_PageHeading__WEBPACK_IMPORTED_MODULE_22__["PageHeading"].create('sync', [{
     name: 'ESGST',
-    url: _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.settingsUrl
+    url: _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.settingsUrl
   }, {
     name: 'Sync',
-    url: _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.syncUrl
+    url: _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.syncUrl
   }]).insert(containerr, 'afterbegin').nodes.outer;
   if (!isPopup && !syncer.isSilent) {
-    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.mainPageHeading = heading;
+    _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.mainPageHeading = heading;
   }
   if (syncer.isSilent) {
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(context, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(context, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       ref: ref => syncer.area = ref
     }));
   } else {
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(context, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(context, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-menu-split"
-    }, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    }, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-sync-options"
-    }), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    }), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-sync-area"
     })));
-    _components_Button__WEBPACK_IMPORTED_MODULE_19__["Button"].create([{
+    _components_Button__WEBPACK_IMPORTED_MODULE_20__["Button"].create([{
       color: 'green',
       icons: [],
       name: 'Save Changes',
       onClick: async () => {
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveSettings(toSave);
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveSettings(toSave);
         toSave = {};
         if (isPopup) {
           popup.close();
@@ -33074,7 +33084,7 @@ async function setSync(isPopup = false, isSilent = false) {
     }]).insert(context, 'beforeend');
     syncer.container = context.querySelector('.esgst-sync-options');
     syncer.area = context.querySelector('.esgst-sync-area');
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.area, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.area, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       ref: ref => syncer.notificationArea = ref
     }));
     syncer.manual = /** @type {{ check: boolean, content: Element[], name: string }} */{
@@ -33089,31 +33099,31 @@ async function setSync(isPopup = false, isSilent = false) {
     };
     syncer.switchesKeys = SYNC_KEYS;
     syncer.switches = {};
-    for (const type in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.features) {
-      for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.features[type].features) {
-        getDependencies(syncer, _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.features[type].features[id], id);
+    for (const type in _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.features) {
+      for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.features[type].features) {
+        getDependencies(syncer, _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.features[type].features[id], id);
       }
     }
     for (let id in syncer.switchesKeys) {
       if (syncer.switchesKeys.hasOwnProperty(id)) {
         const info = syncer.switchesKeys[id];
-        const checkbox = new _class_Checkbox__WEBPACK_IMPORTED_MODULE_9__["Checkbox"](null, _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(id));
+        const checkbox = new _class_Checkbox__WEBPACK_IMPORTED_MODULE_10__["Checkbox"](null, _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(id));
         checkbox.onChange = () => {
           toSave[`sync${info.key}`] = checkbox.value;
-          _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].set(`sync${info.key}`, checkbox.value);
+          _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].set(`sync${info.key}`, checkbox.value);
         };
         syncer.switches[id] = checkbox;
-        syncer.manual.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
+        syncer.manual.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("i", {
           className: "fa fa-question-circle",
-          title: `This is required for the following features:\n\n${info.dependencies.map(x => _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getFeatureName(null, x)).join('\n')}`
-        }), ' ', checkbox.checkbox, " ", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", null, info.name)));
+          title: `This is required for the following features:\n\n${info.dependencies.map(x => _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getFeatureName(null, x)).join('\n')}`
+        }), ' ', checkbox.checkbox, " ", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", null, info.name)));
         if (info.key !== 'HiddenGames' && info.key !== 'Whitelist' && info.key !== 'Blacklist') {
           setAutoSync(info.key, info.name, syncer);
         }
         addNotificationBars(syncer, info);
       }
     }
-    syncer.button = _components_Button__WEBPACK_IMPORTED_MODULE_19__["Button"].create([{
+    syncer.button = _components_Button__WEBPACK_IMPORTED_MODULE_20__["Button"].create([{
       color: 'green',
       icons: ['fa-refresh'],
       name: 'Sync',
@@ -33126,51 +33136,51 @@ async function setSync(isPopup = false, isSilent = false) {
       },
       onClick: cancelSync.bind(null, syncer)
     }]).build();
-    syncer.manual.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    syncer.manual.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-button-group"
-    }, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", null, "Select:"), _components_Button__WEBPACK_IMPORTED_MODULE_19__["Button"].create([{
+    }, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", null, "Select:"), _components_Button__WEBPACK_IMPORTED_MODULE_20__["Button"].create([{
       color: 'white',
       icons: ['fa-square'],
       name: 'All',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common, syncer.switches, 'check', null)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common, syncer.switches, 'check', null)
     }, {
       template: 'loading',
       isDisabled: true,
       name: ''
-    }]).build().nodes.outer, _components_Button__WEBPACK_IMPORTED_MODULE_19__["Button"].create([{
+    }]).build().nodes.outer, _components_Button__WEBPACK_IMPORTED_MODULE_20__["Button"].create([{
       color: 'white',
       icons: ['fa-square-o'],
       name: 'None',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common, syncer.switches, 'uncheck', null)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common, syncer.switches, 'uncheck', null)
     }, {
       template: 'loading',
       isDisabled: true,
       name: ''
-    }]).build().nodes.outer, _components_Button__WEBPACK_IMPORTED_MODULE_19__["Button"].create([{
+    }]).build().nodes.outer, _components_Button__WEBPACK_IMPORTED_MODULE_20__["Button"].create([{
       color: 'white',
       icons: ['fa-plus-square-o'],
       name: 'Inverse',
-      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common, syncer.switches, 'toggle', null)
+      onClick: _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.selectSwitches.bind(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common, syncer.switches, 'toggle', null)
     }, {
       template: 'loading',
       isDisabled: true,
       name: ''
     }]).build().nodes.outer), syncer.button.nodes.outer);
-    syncer.automatic.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    syncer.automatic.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-description"
     }, "Select how often you want the automatic sync to run (in days) or 0 to disable it."));
-    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.createFormRows(syncer.container, 'beforeend', {
+    _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.createFormRows(syncer.container, 'beforeend', {
       items: [syncer.manual, syncer.automatic]
     });
-    if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('at')) {
-      _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.modules.generalAccurateTimestamp.at_getTimestamps(syncer.notificationArea);
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('at')) {
+      _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.modules.generalAccurateTimestamp.at_getTimestamps(syncer.notificationArea);
     }
   }
-  syncer.progressBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_20__["NotificationBar"].create().insert(syncer.area, 'beforeend').hide();
-  syncer.results = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.createElements(syncer.area, 'beforeend', [{
+  syncer.progressBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_21__["NotificationBar"].create().insert(syncer.area, 'beforeend').hide();
+  syncer.results = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.createElements(syncer.area, 'beforeend', [{
     type: 'div'
   }]);
-  if (!syncer.isSilent && !_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isSyncing && syncer.parameters && syncer.button) {
+  if (!syncer.isSilent && !_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isSyncing && syncer.parameters && syncer.button) {
     syncer.button.onClick();
   }
   return syncer;
@@ -33183,36 +33193,36 @@ function updateSyncDates(syncer) {
       addNotificationBars(syncer, info);
     }
   }
-  if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('at')) {
-    _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.modules.generalAccurateTimestamp.at_getTimestamps(syncer.notificationArea);
+  if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('at')) {
+    _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.modules.generalAccurateTimestamp.at_getTimestamps(syncer.notificationArea);
   }
 }
 function addNotificationBars(syncer, info) {
-  const notificationBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_20__["NotificationBar"].create().build();
-  let timestamp = _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(`lastSync${info.key}`);
+  const notificationBar = _components_NotificationBar__WEBPACK_IMPORTED_MODULE_21__["NotificationBar"].create().build();
+  let timestamp = _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(`lastSync${info.key}`);
   if (timestamp) {
-    notificationBar.setSuccess(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, "Synced ", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", null, info.name), ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+    notificationBar.setSuccess(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, "Synced ", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", null, info.name), ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       "data-timestamp": timestamp / 1e3
-    }, Object(date_fns_formatDistanceStrict__WEBPACK_IMPORTED_MODULE_8__["default"])(timestamp, new Date())), ' ago.'));
+    }, Object(date_fns_formatDistanceStrict__WEBPACK_IMPORTED_MODULE_9__["default"])(timestamp, new Date())), ' ago.'));
   } else {
-    notificationBar.setWarning(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, "Never synced ", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", null, info.name)));
+    notificationBar.setWarning(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, "Never synced ", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", null, info.name)));
   }
   notificationBar.insert(syncer.notificationArea, 'beforeend');
 }
 function setAutoSync(key, name, syncer) {
   let days = [];
   for (let i = 0; i < 31; ++i) {
-    days.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("option", {
-      selected: i === _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(`autoSync${key}`) ? true : null
+    days.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("option", {
+      selected: i === _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(`autoSync${key}`) ? true : null
     }, i));
   }
-  syncer.automatic.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("select", {
+  syncer.automatic.content.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("select", {
     className: "esgst-auto-sync",
     onchange: event => {
-      _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].set(`autoSync${key}`, parseInt(event.currentTarget.value));
+      _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].set(`autoSync${key}`, parseInt(event.currentTarget.value));
       toSave[`autoSync${key}`] = parseInt(event.currentTarget.value);
     }
-  }, days), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", null, name)));
+  }, days), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", null, name)));
 }
 function cancelSync(syncer) {
   if (syncer.process) {
@@ -33225,32 +33235,32 @@ function cancelSync(syncer) {
 //use: syncer.results, syncer.progressBar, syncer.parameters
 async function sync(syncer) {
   const now = Date.now();
-  if (syncer.parameters && syncer.parameters.HiddenGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncHiddenGames')) {
-    if (now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncHiddenGames') > 0) {
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageHiddenGames') === 0) {
-        const doContinue = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.createConfirmationAsync(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+  if (syncer.parameters && syncer.parameters.HiddenGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncHiddenGames')) {
+    if (now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncHiddenGames') > 0) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageHiddenGames') === 0) {
+        const doContinue = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.createConfirmationAsync(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "notification yellow notification--warning esgst-sync-warning"
-        }, "WARNING: Syncing your hidden games may take a long time depending on the amount of games."), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+        }, "WARNING: Syncing your hidden games may take a long time depending on the amount of games."), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "esgst-text-left"
-        }, "The requests will be limited to 1 per second to avoid SteamGifts timing you out for 'Too Many Requests' in a short period of time.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "This is a cumulative sync, so it will pick up where it left off if cancelled.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("hr", null)), _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncHiddenGames') > 0 ? _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+        }, "The requests will be limited to 1 per second to avoid SteamGifts timing you out for 'Too Many Requests' in a short period of time.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "This is a cumulative sync, so it will pick up where it left off if cancelled.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("hr", null)), _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncHiddenGames') > 0 ? _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "esgst-text-left"
-        }, "You should only need to perform a manual sync in rare cases, as ESGST automatically detects and updates your hidden game changes.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "By syncing as little as possible, you help keep SteamGifts running smoothly for everyone. \u2764\uFE0F")) : '', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable hidden games sync."));
+        }, "You should only need to perform a manual sync in rare cases, as ESGST automatically detects and updates your hidden game changes.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "By syncing as little as possible, you help keep SteamGifts running smoothly for everyone. \u2764\uFE0F")) : '', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable hidden games sync."));
         if (!doContinue) {
           return;
         }
       }
     }
   }
-  if (syncer.parameters && (syncer.parameters.Whitelist || syncer.parameters.Blacklist) || !syncer.parameters && (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncWhitelist') || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncBlacklist'))) {
-    if (now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncWhitelist') > 0 || now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncBlacklist') > 0) {
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPagewhitelisted') === 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageblacklisted') === 0) {
-        const doContinue = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.createConfirmationAsync(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+  if (syncer.parameters && (syncer.parameters.Whitelist || syncer.parameters.Blacklist) || !syncer.parameters && (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncWhitelist') || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncBlacklist'))) {
+    if (now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncWhitelist') > 0 || now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncBlacklist') > 0) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPagewhitelisted') === 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageblacklisted') === 0) {
+        const doContinue = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.createConfirmationAsync(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "notification yellow notification--warning esgst-sync-warning"
-        }, "WARNING: Syncing your whitelist or blacklist may take a long time depending on the amount of users."), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+        }, "WARNING: Syncing your whitelist or blacklist may take a long time depending on the amount of users."), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "esgst-text-left"
-        }, "The requests will be limited to 1 per second to avoid SteamGifts timing you out for 'Too Many Requests' in a short period of time.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "This is a cumulative sync, so it will pick up where it left off if cancelled.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("hr", null)), _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncHiddenGames') > 0 ? _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+        }, "The requests will be limited to 1 per second to avoid SteamGifts timing you out for 'Too Many Requests' in a short period of time.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "This is a cumulative sync, so it will pick up where it left off if cancelled.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("hr", null)), _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncHiddenGames') > 0 ? _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
           className: "esgst-text-left"
-        }, "You should only need to perform a manual sync in rare cases, as ESGST automatically detects and updates your hidden game changes.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "By syncing as little as possible, you help keep SteamGifts running smoothly for everyone. \u2764\uFE0F")) : '', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable whitelist or blacklist sync."));
+        }, "You should only need to perform a manual sync in rare cases, as ESGST automatically detects and updates your hidden game changes.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "By syncing as little as possible, you help keep SteamGifts running smoothly for everyone. \u2764\uFE0F")) : '', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "If you're sure you want to continue, click 'Yes', otherwise click 'No' and disable whitelist or blacklist sync."));
         if (!doContinue) {
           return;
         }
@@ -33258,14 +33268,14 @@ async function sync(syncer) {
     }
   }
   syncer.canceled = false;
-  if (!_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isFirstRun) {
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('lastSync', now);
+  if (!_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isFirstRun) {
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('lastSync', now);
     syncer.results.innerHTML = '';
     syncer.progressBar.setLoading(null).show();
   }
 
   // if this is the user's fist time using the script, only sync steam id and stop
-  if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isFirstRun) {
+  if (_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isFirstRun) {
     return;
   }
 
@@ -33276,10 +33286,10 @@ async function sync(syncer) {
   syncer.failed = {};
 
   // sync groups
-  if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.sg && (syncer.parameters && syncer.parameters.Groups || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncGroups'))) {
+  if (_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.sg && (syncer.parameters && syncer.parameters.Groups || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncGroups'))) {
     syncer.progressBar.setMessage('Syncing your Steam groups...');
     syncer.groups = {};
-    let savedGroups = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('groups'));
+    let savedGroups = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('groups'));
     if (!Array.isArray(savedGroups)) {
       let newGroups, savedGiveaways;
       newGroups = [];
@@ -33289,14 +33299,14 @@ async function sync(syncer) {
         }
       }
       savedGroups = newGroups;
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('groups', JSON.stringify(savedGroups));
-      savedGiveaways = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('giveaways'));
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('groups', JSON.stringify(savedGroups));
+      savedGiveaways = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('giveaways'));
       for (let key in savedGiveaways) {
         if (savedGiveaways.hasOwnProperty(key)) {
           delete savedGiveaways[key].groups;
         }
       }
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('giveaways', JSON.stringify(savedGiveaways));
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('giveaways', JSON.stringify(savedGiveaways));
     }
     syncer.currentGroups = {};
     for (let i = 0, n = savedGroups.length; i < n; ++i) {
@@ -33311,7 +33321,7 @@ async function sync(syncer) {
     do {
       let elements, responseHtml;
       syncer.progressBar.setMessage(`Fetching your Steam groups (page ${nextPage})...`);
-      responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.steamgifts.com/account/steam/groups/search?page=${nextPage}`)).html;
+      responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://www.steamgifts.com/account/steam/groups/search?page=${nextPage}`)).html;
       elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
       for (let i = 0, n = elements.length; !syncer.canceled && i < n; i++) {
         let code, element, heading, name;
@@ -33335,7 +33345,7 @@ async function sync(syncer) {
           let avatar, steamId;
           avatar = element.getElementsByClassName('table_image_avatar')[0].style.backgroundImage.match(/url\("(.+)"\)/)[1];
           syncer.progressBar.setMessage(`Fetching Steam ID for ${name}...`);
-          steamId = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`/group/${code}/`)).html.getElementsByClassName('sidebar__shortcut-inner-wrap')[0].firstElementChild.getAttribute('href').match(/\d+/)[0];
+          steamId = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`/group/${code}/`)).html.getElementsByClassName('sidebar__shortcut-inner-wrap')[0].firstElementChild.getAttribute('href').match(/\d+/)[0];
           syncer.groups[code] = {
             avatar: avatar,
             code: code,
@@ -33349,14 +33359,14 @@ async function sync(syncer) {
       pagination = responseHtml.getElementsByClassName('pagination__navigation')[0];
       nextPage += 1;
     } while (!syncer.canceled && pagination && !pagination.lastElementChild.classList.contains('is-selected'));
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveGroups(syncer.groups, true);
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveGroups(syncer.groups, true);
     let missing, neww;
     missing = [];
     neww = [];
     for (let id in syncer.currentGroups) {
       if (syncer.currentGroups.hasOwnProperty(id)) {
         if (!syncer.newGroups[id]) {
-          missing.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+          missing.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
             href: `http://steamcommunity.com/gid/${id}`
           }, syncer.currentGroups[id]), ', ');
         }
@@ -33365,7 +33375,7 @@ async function sync(syncer) {
     for (let id in syncer.newGroups) {
       if (syncer.newGroups.hasOwnProperty(id)) {
         if (!syncer.currentGroups[id]) {
-          neww.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+          neww.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
             href: `http://steamcommunity.com/gid/${id}`
           }, syncer.newGroups[id]), ', ');
         }
@@ -33375,16 +33385,16 @@ async function sync(syncer) {
     neww.pop();
     syncer.jsx = [];
     if (missing.length) {
-      syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+      syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
         className: "esgst-bold"
       }, "Missing groups:"), " ", missing));
     }
     if (neww.length) {
-      syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+      syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
         className: "esgst-bold"
       }, "New groups:"), " ", neww));
     }
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Groups synced."), syncer.jsx));
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Groups synced."), syncer.jsx));
   }
 
   // if sync has been canceled stop
@@ -33393,32 +33403,32 @@ async function sync(syncer) {
   }
 
   // sync whitelist and blacklist
-  if ((syncer.parameters && syncer.parameters.Whitelist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncWhitelist')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncWhitelist') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPagewhitelisted') > 0) || (syncer.parameters && syncer.parameters.Blacklist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncBlacklist')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncBlacklist') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageblacklisted') > 0)) {
-    if (syncer.parameters && syncer.parameters.Whitelist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncWhitelist')) {
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPagewhitelisted') === 0) {
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.deleteUserValues(['whitelisted', 'whitelistedDate']);
+  if ((syncer.parameters && syncer.parameters.Whitelist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncWhitelist')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncWhitelist') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPagewhitelisted') > 0) || (syncer.parameters && syncer.parameters.Blacklist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncBlacklist')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncBlacklist') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageblacklisted') > 0)) {
+    if (syncer.parameters && syncer.parameters.Whitelist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncWhitelist')) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPagewhitelisted') === 0) {
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.deleteUserValues(['whitelisted', 'whitelistedDate']);
       }
       syncer.progressBar.setMessage('Syncing your whitelist...');
       await syncWhitelistBlacklist('whitelisted', syncer, `https://www.steamgifts.com/account/manage/whitelist/search?page=`);
       if (!syncer.canceled) {
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('lastPagewhitelisted', 0);
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('lastPagewhitelisted', 0);
       }
     }
     if (syncer.canceled) {
       return;
     }
-    if (syncer.parameters && syncer.parameters.Blacklist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncBlacklist')) {
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageblacklisted') === 0) {
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.deleteUserValues(['blacklisted', 'blacklistedDate']);
+    if (syncer.parameters && syncer.parameters.Blacklist || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncBlacklist')) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageblacklisted') === 0) {
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.deleteUserValues(['blacklisted', 'blacklistedDate']);
       }
       syncer.progressBar.setMessage('Syncing your blacklist...');
       await syncWhitelistBlacklist('blacklisted', syncer, `https://www.steamgifts.com/account/manage/blacklist/search?page=`);
       if (!syncer.canceled) {
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('lastPageblacklisted', 0);
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('lastPageblacklisted', 0);
       }
     }
     if (!syncer.canceled) {
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Whitelist/blacklist synced."));
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Whitelist/blacklist synced."));
     }
   }
 
@@ -33428,14 +33438,14 @@ async function sync(syncer) {
   }
 
   // sync steam friends
-  if (syncer.parameters && syncer.parameters.SteamFriends || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncSteamFriends')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['steamApi']]);
+  if (syncer.parameters && syncer.parameters.SteamFriends || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncSteamFriends')) {
+    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['steamApi']]);
     if (isPermitted) {
       try {
         const users = [];
         syncer.progressBar.setMessage('Syncing your Steam friends...');
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.deleteUserValues(['steamFriend']);
-        const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`http://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamId')}&relationship=friend`);
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.deleteUserValues(['steamFriend']);
+        const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`http://api.steampowered.com/ISteamUser/GetFriendList/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamId')}&relationship=friend`);
         for (const friend of response.json.friendslist.friends) {
           users.push({
             steamId: friend.steamid,
@@ -33445,15 +33455,15 @@ async function sync(syncer) {
           });
         }
         syncer.progressBar.setMessage(`Saving your Steam friends (this may take a while)...`);
-        await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.saveUsers(users);
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Steam friends synced."));
+        await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.saveUsers(users);
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Steam friends synced."));
       } catch (e) {
         syncer.failed.SteamFriends = true;
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Failed to sync your Steam friends. Check if you have a valid Steam API key set or if your profile is public."));
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Failed to sync your Steam friends. Check if you have a valid Steam API key set or if your profile is public."));
       }
     } else {
       syncer.failed.SteamFriends = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['steamApi']])));
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].getMessage([['steamApi']])));
     }
   }
 
@@ -33463,14 +33473,14 @@ async function sync(syncer) {
   }
 
   // sync hidden games
-  if ((syncer.parameters && syncer.parameters.HiddenGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncHiddenGames')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastSyncHiddenGames') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageHiddenGames') > 0)) {
+  if ((syncer.parameters && syncer.parameters.HiddenGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncHiddenGames')) && (now - _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastSyncHiddenGames') > 0 || _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageHiddenGames') > 0)) {
     syncer.progressBar.setMessage('Syncing your hidden games...');
-    if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageHiddenGames') === 0) {
-      const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_13__["Lock"]('game', {
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageHiddenGames') === 0) {
+      const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_14__["Lock"]('game', {
         threshold: 300
       });
       await lock.lock();
-      let savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('games'));
+      let savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('games'));
       for (let key in savedGames.apps) {
         if (savedGames.apps.hasOwnProperty(key)) {
           delete savedGames.apps[key].hidden;
@@ -33481,10 +33491,10 @@ async function sync(syncer) {
           delete savedGames.subs[key].hidden;
         }
       }
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('games', JSON.stringify(savedGames));
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('games', JSON.stringify(savedGames));
       await lock.unlock();
     }
-    let nextPage = _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageHiddenGames') > 0 ? _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('lastPageHiddenGames') : 1;
+    let nextPage = _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageHiddenGames') > 0 ? _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('lastPageHiddenGames') : 1;
     let pagination = null;
     do {
       const hiddenGames = {
@@ -33493,7 +33503,7 @@ async function sync(syncer) {
       };
       let elements, responseHtml;
       syncer.progressBar.setMessage(`Syncing your hidden games (page ${nextPage})...`);
-      responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://www.steamgifts.com/account/settings/giveaways/filters/search?page=${nextPage}`, {
+      responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://www.steamgifts.com/account/settings/giveaways/filters/search?page=${nextPage}`, {
         queue: true
       })).html;
       elements = responseHtml.querySelectorAll(`.table__column__secondary-link[href*="store.steampowered.com"]`);
@@ -33505,11 +33515,11 @@ async function sync(syncer) {
       }
       pagination = responseHtml.getElementsByClassName('pagination__navigation')[0];
       nextPage += 1;
-      const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_13__["Lock"]('game', {
+      const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_14__["Lock"]('game', {
         threshold: 300
       });
       await lock.lock();
-      let savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('games'));
+      let savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('games'));
       for (let i = 0, n = hiddenGames.apps.length; i < n; ++i) {
         if (!savedGames.apps[hiddenGames.apps[i]]) {
           savedGames.apps[hiddenGames.apps[i]] = {};
@@ -33522,13 +33532,13 @@ async function sync(syncer) {
         }
         savedGames.subs[hiddenGames.subs[i]].hidden = true;
       }
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('games', JSON.stringify(savedGames));
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('games', JSON.stringify(savedGames));
       await lock.unlock();
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('lastPageHiddenGames', nextPage);
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('lastPageHiddenGames', nextPage);
     } while (!syncer.canceled && pagination && !pagination.lastElementChild.classList.contains('is-selected'));
     if (!syncer.canceled) {
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('lastPageHiddenGames', 0);
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Hidden games synced."));
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('lastPageHiddenGames', 0);
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Hidden games synced."));
     }
   }
 
@@ -33536,7 +33546,7 @@ async function sync(syncer) {
   if (syncer.canceled) {
     return;
   }
-  if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_s')) {
+  if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_s')) {
     syncer.hgm = {
       toAdd: {
         apps: new Set(),
@@ -33550,17 +33560,17 @@ async function sync(syncer) {
   }
 
   // sync wishlisted/owned/ignored games
-  if (syncer.parameters && syncer.parameters.Games || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncGames')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['steamApi'], ['steamStore']]);
+  if (syncer.parameters && syncer.parameters.Games || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncGames')) {
+    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['steamApi'], ['steamStore']]);
     if (isPermitted) {
       syncer.progressBar.setMessage('Syncing your wishlisted/owned/ignored games...');
       try {
         syncer.jsx = [];
         let apiResponse = null;
         let apiFailed = false;
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')) {
+        if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')) {
           try {
-            apiResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamId')}&format=json`);
+            apiResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamId')}&format=json`);
           } catch (e) {
             apiResponse = null;
             apiFailed = true;
@@ -33568,46 +33578,46 @@ async function sync(syncer) {
         }
         let storeResponse = null;
         try {
-          storeResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://store.steampowered.com/dynamicstore/userdata?${Math.random().toString().split('.')[1]}`);
+          storeResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://store.steampowered.com/dynamicstore/userdata?${Math.random().toString().split('.')[1]}`);
         } catch (e) {
           storeResponse = null;
         }
         const syncedGames = await syncGames(null, syncer, apiResponse, storeResponse, apiFailed);
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('gc_o_a')) {
-          const altAccounts = _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('gc_o_altAccounts');
+        if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('gc_o_a')) {
+          const altAccounts = _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('gc_o_altAccounts');
           if ((altAccounts === null || altAccounts === void 0 ? void 0 : altAccounts.length) > 0) {
-            if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')) {
+            if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')) {
               for (const altAccount of altAccounts) {
                 if (syncer.canceled) {
                   break;
                 }
                 let altApiFailed = false;
                 try {
-                  apiResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')}&steamid=${altAccount.steamId}&format=json`);
+                  apiResponse = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')}&steamid=${altAccount.steamId}&format=json`);
                 } catch (e) {
                   apiResponse = null;
                   altApiFailed = true;
                 }
                 await syncGames(altAccount, syncer, apiResponse, null, altApiFailed);
               }
-              await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting('gc_o_altAccounts', altAccounts);
+              await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting('gc_o_altAccounts', altAccounts);
             } else {
-              syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Failed to sync your owned games from alt accounts. Check if you have a valid Steam API key set in the settings menu."));
+              syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Failed to sync your owned games from alt accounts. Check if you have a valid Steam API key set in the settings menu."));
             }
           }
         }
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, syncedGames ? 'Owned/wishlisted/ignored games synced.' : 'Owned/wishlisted/ignored games were not synced.'), syncer.jsx));
-        if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('getSyncGameNames')) {
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("fragment", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, syncedGames ? 'Owned/wishlisted/ignored games synced.' : 'Owned/wishlisted/ignored games were not synced.'), syncer.jsx));
+        if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('getSyncGameNames')) {
           // noinspection JSIgnoredPromiseFromCall
-          _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getGameNames(syncer.results);
+          _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getGameNames(syncer.results);
         }
       } catch (e) {
         syncer.failed.Games = true;
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Failed to sync your owned / wishlisted / ignored games.", ' ', e && e.message ? e.message : 'Try again later.'));
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Failed to sync your owned / wishlisted / ignored games.", ' ', e && e.message ? e.message : 'Try again later.'));
       }
     } else {
       syncer.failed.Games = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['steamApi'], ['steamStore']])));
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].getMessage([['steamApi'], ['steamStore']])));
     }
   }
 
@@ -33617,22 +33627,22 @@ async function sync(syncer) {
   }
 
   // sync followed games
-  if (syncer.parameters && syncer.parameters.FollowedGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncFollowedGames')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['steamCommunity']]);
+  if (syncer.parameters && syncer.parameters.FollowedGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncFollowedGames')) {
+    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['steamCommunity']]);
     if (isPermitted) {
       syncer.progressBar.setMessage('Syncing your followed games...');
-      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get('https://steamcommunity.com/my/followedgames/');
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get('https://steamcommunity.com/my/followedgames/');
       const isLoggedOut = response.html.querySelector('a[href*="/login/home/"]');
       if (isLoggedOut) {
         syncer.failed.FollowedGames = true;
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Unable to sync followed games. Check if you are logged in to Steam on your current browser session. If you are, try again later."));
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Unable to sync followed games. Check if you are logged in to Steam on your current browser session. If you are, try again later."));
       } else {
         try {
           var _data$loaderData, _JSON$parse$listData;
           const data = JSON.parse(response.html.querySelector('#valve-ssr-data').textContent);
           const list = (_data$loaderData = data.loaderData) === null || _data$loaderData === void 0 ? void 0 : _data$loaderData.find(item => item.includes('"mapFollowedUnownedGames"'));
           const followedIds = new Set((_JSON$parse$listData = JSON.parse(list).listData) === null || _JSON$parse$listData === void 0 || (_JSON$parse$listData = _JSON$parse$listData.mapFollowedUnownedGames) === null || _JSON$parse$listData === void 0 ? void 0 : _JSON$parse$listData.v.map(([appId]) => appId));
-          const savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('games'));
+          const savedGames = JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('games'));
           for (const id in savedGames.apps) {
             if (savedGames.apps.hasOwnProperty(id)) {
               savedGames.apps[id].followed = null;
@@ -33644,17 +33654,17 @@ async function sync(syncer) {
             }
             savedGames.apps[id].followed = true;
           }
-          await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveGames(savedGames);
-          _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, followedIds.size, " Followed games synced."));
+          await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveGames(savedGames);
+          _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, followedIds.size, " Followed games synced."));
         } catch (error) {
           syncer.failed.FollowedGames = true;
           console.error('Failed to sync followed games:', error);
-          _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Unable to sync followed games. The response data was missing or invalid. Your saved followed-game data was not changed."));
+          _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Unable to sync followed games. The response data was missing or invalid. Your saved followed-game data was not changed."));
         }
       }
     } else {
       syncer.failed.FollowedGames = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['steamCommunity']])));
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].getMessage([['steamCommunity']])));
     }
   }
 
@@ -33664,10 +33674,10 @@ async function sync(syncer) {
   }
 
   // sync won games
-  if (syncer.parameters && syncer.parameters.WonGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncWonGames')) {
+  if (syncer.parameters && syncer.parameters.WonGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncWonGames')) {
     syncer.progressBar.setMessage('Syncing your won games...');
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getWonGames(syncer);
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Won games synced."));
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getWonGames(syncer);
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Won games synced."));
   }
 
   // if sync has been canceled stop
@@ -33676,27 +33686,19 @@ async function sync(syncer) {
   }
 
   // sync reduced cv games
-  if (syncer.parameters && syncer.parameters.ReducedCvGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncReducedCvGames')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['server']]);
-    if (isPermitted) {
-      syncer.progressBar.setMessage('Syncing reduced CV games...');
-      try {
-        await syncReducedCvGames();
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
-          className: "fa fa-check"
-        }), " Reduced CV games synced."));
-      } catch (e) {
-        _class_Logger__WEBPACK_IMPORTED_MODULE_14__["Logger"].warning(e.message);
-        syncer.failed.ReducedCvGames = true;
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
-          className: "fa fa-times"
-        }), " Failed to sync reduced CV games."));
-      }
-    } else {
+  if (syncer.parameters && syncer.parameters.ReducedCvGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncReducedCvGames')) {
+    syncer.progressBar.setMessage('Syncing reduced CV games...');
+    try {
+      await syncReducedCvGames(syncer);
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("i", {
+        className: "fa fa-check"
+      }), " Reduced CV games synced."));
+    } catch (e) {
+      _class_Logger__WEBPACK_IMPORTED_MODULE_15__["Logger"].warning(e.message);
       syncer.failed.ReducedCvGames = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("i", {
         className: "fa fa-times"
-      }), " ", _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['server']])));
+      }), " Failed to sync reduced CV games."));
     }
   }
 
@@ -33706,50 +33708,42 @@ async function sync(syncer) {
   }
 
   // sync no cv games
-  if (syncer.parameters && syncer.parameters.NoCvGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncNoCvGames')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['server']]);
-    if (isPermitted) {
-      syncer.progressBar.setMessage('Syncing no CV games...');
-      try {
-        await syncNoCvGames();
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
-          className: "fa fa-check"
-        }), " No CV games synced."));
-      } catch (e) {
-        _class_Logger__WEBPACK_IMPORTED_MODULE_14__["Logger"].warning(e.message);
-        syncer.failed.NoCvGames = true;
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
-          className: "fa fa-times"
-        }), " Failed to sync no CV games."));
-      }
-    } else {
+  if (syncer.parameters && syncer.parameters.NoCvGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncNoCvGames')) {
+    syncer.progressBar.setMessage('Syncing no CV games...');
+    try {
+      await syncNoCvGames(syncer);
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("i", {
+        className: "fa fa-check"
+      }), " No CV games synced."));
+    } catch (e) {
+      _class_Logger__WEBPACK_IMPORTED_MODULE_15__["Logger"].warning(e.message);
       syncer.failed.NoCvGames = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("i", {
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("i", {
         className: "fa fa-times"
-      }), " ", _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['server']])));
+      }), " Failed to sync no CV games."));
     }
   }
 
   // sync hltb times ( HowLongToBeat web app is no longer available )
-  if (syncer.parameters && syncer.parameters.HltbTimes || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncHltbTimes')) {
+  if (syncer.parameters && syncer.parameters.HltbTimes || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncHltbTimes')) {
     syncer.progressBar.setMessage('Syncing HLTB times...');
-    const cache = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].get('gcCache', `{ "apps": {}, "subs": {}, "hltb": {}, "timestamp": 0, "version": 7 }`));
+    const cache = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__["LocalStorage"].get('gcCache', `{ "apps": {}, "subs": {}, "hltb": {}, "timestamp": 0, "version": 7 }`));
     if (cache.version !== 7) {
       cache.version = 7;
       cache.timestamp = 0;
       cache.apps = cache.apps || {};
       cache.subs = cache.subs || {};
       cache.hltb = cache.hltb || {};
-      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].set('gcCache', JSON.stringify(cache));
+      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__["LocalStorage"].set('gcCache', JSON.stringify(cache));
     }
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       style: {
         color: 'red',
         marginTop: '10px',
         marginBottom: '10px',
         fontWeight: 'bold'
       }
-    }, "The HowLongToBeat web app that powered HLTB Times is no longer available.", _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), "Syncing times will remain unavailable until a new data source is implemented."));
+    }, "The HowLongToBeat web app that powered HLTB Times is no longer available.", _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), "Syncing times will remain unavailable until a new data source is implemented."));
   }
 
   // if sync has been canceled stop
@@ -33758,51 +33752,51 @@ async function sync(syncer) {
   }
 
   // sync delisted games
-  if (syncer.parameters && syncer.parameters.DelistedGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncDelistedGames')) {
-    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].contains([['steamTracker']]);
+  if (syncer.parameters && syncer.parameters.DelistedGames || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncDelistedGames')) {
+    const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['steamTracker']]);
     if (isPermitted) {
       syncer.progressBar.setMessage('Syncing delisted games...');
-      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get('https://steam-tracker.com/api?action=GetAppListV3');
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get('https://steam-tracker.com/api?action=GetAppListV3');
       try {
         if (response.json.success) {
           const banned = response.json.removed_apps.filter(x => x.type === 'game' && x.category === 'Banned').map(x => parseInt(x.appid));
           const removed = response.json.removed_apps.filter(x => x.type === 'game' && x.category === 'Delisted').map(x => parseInt(x.appid));
-          await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('delistedGames', JSON.stringify({
+          await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('delistedGames', JSON.stringify({
             banned,
             removed
           }));
-          if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_s')) {
-            if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_addBanned')) {
+          if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_s')) {
+            if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_addBanned')) {
               for (const id of banned) {
                 syncer.hgm.toAdd.apps.add(id);
               }
-            } else if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_removeBanned')) {
+            } else if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_removeBanned')) {
               for (const id of banned) {
                 syncer.hgm.toRemove.apps.add(id);
               }
             }
           }
         }
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Delisted games synced."));
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Delisted games synced."));
       } catch (error) {
-        _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Failed to sync delisted games (check the console log for more info)."));
-        _class_Logger__WEBPACK_IMPORTED_MODULE_14__["Logger"].warning(error.message, error.stack);
+        _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Failed to sync delisted games (check the console log for more info)."));
+        _class_Logger__WEBPACK_IMPORTED_MODULE_15__["Logger"].warning(error.message, error.stack);
       }
     } else {
       syncer.failed.DelistedGames = true;
-      _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_15__["permissions"].getMessage([['steamTracker']])));
+      _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].getMessage([['steamTracker']])));
     }
   }
   if (syncer.canceled) {
     return;
   }
-  if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_s')) {
-    const result = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.hideGames({
+  if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_s')) {
+    const result = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.hideGames({
       appIds: syncer.hgm.toAdd.apps,
       subIds: syncer.hgm.toAdd.subs,
       update: message => syncer.progressBar.setMessage(message)
     });
-    const tmpResult = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.hideGames({
+    const tmpResult = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.hideGames({
       appIds: syncer.hgm.toRemove.apps,
       subIds: syncer.hgm.toRemove.subs,
       update: message => syncer.progressBar.setMessage(message)
@@ -33825,139 +33819,217 @@ async function sync(syncer) {
   }
 
   // sync giveaways
-  if ((syncer.parameters && syncer.parameters.Giveaways || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncGiveaways')) && _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.sg) {
+  if ((syncer.parameters && syncer.parameters.Giveaways || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncGiveaways')) && _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.sg) {
     syncer.progressBar.setMessage('Syncing your giveaways...');
     const key = 'sent';
     const user = {
-      steamId: _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamId'),
-      username: _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('username')
+      steamId: _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamId'),
+      username: _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('username')
     };
-    syncer.process = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.modules.usersUserGiveawayData.ugd_add(null, key, user, syncer);
+    syncer.process = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.modules.usersUserGiveawayData.ugd_add(null, key, user, syncer);
     await syncer.process.start();
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Giveaways synced."));
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Giveaways synced."));
   }
 
   // sync won giveaways
-  if ((syncer.parameters && syncer.parameters.WonGiveaways || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('syncWonGiveaways')) && _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.sg) {
+  if ((syncer.parameters && syncer.parameters.WonGiveaways || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('syncWonGiveaways')) && _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.sg) {
     syncer.progressBar.setMessage('Syncing your won giveaways...');
     const key = 'won';
     const user = {
-      steamId: _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamId'),
-      username: _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('username')
+      steamId: _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamId'),
+      username: _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('username')
     };
-    syncer.process = await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.modules.usersUserGiveawayData.ugd_add(null, key, user, syncer);
+    syncer.process = await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.modules.usersUserGiveawayData.ugd_add(null, key, user, syncer);
     await syncer.process.start();
-    _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, "Won giveaways synced."));
+    _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].insert(syncer.results, 'beforeend', _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, "Won giveaways synced."));
   }
 
   // finish sync
-  if (!_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.isFirstRun) {
+  if (!_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.isFirstRun) {
     syncer.progressBar.setMessage('Updating last sync date...');
     let keys = ['Groups', 'Whitelist', 'Blacklist', 'SteamFriends', 'HiddenGames', 'Games', 'FollowedGames', 'WonGames', 'ReducedCvGames', 'NoCvGames', 'HltbTimes', 'DelistedGames', 'Giveaways', 'WonGiveaways'];
     for (let i = keys.length - 1; i > -1; i--) {
       var _syncer$parameters;
       let key = keys[i];
       let id = `sync${key}`;
-      const wasRequested = syncer.parameters && syncer.parameters[key] || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(id);
+      const wasRequested = syncer.parameters && syncer.parameters[key] || !syncer.parameters && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(id);
       if (wasRequested && (_syncer$parameters = syncer.parameters) !== null && _syncer$parameters !== void 0 && _syncer$parameters.autoSync) {
         let failedAutoSyncs = {};
         try {
-          failedAutoSyncs = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].get('failedAutoSyncs', '{}'));
+          failedAutoSyncs = JSON.parse(_class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__["LocalStorage"].get('failedAutoSyncs', '{}'));
         } catch (e) {}
         if (syncer.failed[key]) {
           failedAutoSyncs[key] = now;
         } else {
           delete failedAutoSyncs[key];
         }
-        _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].set('failedAutoSyncs', JSON.stringify(failedAutoSyncs));
+        _class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__["LocalStorage"].set('failedAutoSyncs', JSON.stringify(failedAutoSyncs));
       }
       if (wasRequested && !syncer.failed[key]) {
-        _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].set(`lastSync${key}`, now);
+        _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].set(`lastSync${key}`, now);
         toSave[`lastSync${key}`] = now;
       }
     }
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveSettings(toSave);
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveSettings(toSave);
     toSave = {};
     syncer.progressBar.setSuccess('Synced!');
     if (!Object.keys(syncer.failed).length) {
-      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_12__["LocalStorage"].delete('isSyncing');
+      _class_LocalStorage__WEBPACK_IMPORTED_MODULE_13__["LocalStorage"].delete('isSyncing');
     }
   }
   if (!syncer.isSilent) {
     updateSyncDates(syncer);
   }
 }
-async function syncReducedCvGames() {
-  const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get('https://esgst.rafaelgomes.xyz/api/games/rcv');
-  const games = response.json.result.found;
-  for (const id in games.apps) {
-    if (games.apps.hasOwnProperty(id)) {
-      games.apps[id].reducedCV = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.dateFromServer(games.apps[id].effective_date);
-      delete games.apps[id].effective_date;
-    }
-  }
-  for (const id in games.subs) {
-    if (games.subs.hasOwnProperty(id)) {
-      games.subs[id].reducedCV = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.dateFromServer(games.subs[id].effective_date);
-      delete games.subs[id].effective_date;
-    }
-  }
-  for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.apps) {
-    if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.apps.hasOwnProperty(id) && !games.apps[id]) {
-      games.apps[id] = {
-        reducedCV: null
-      };
-    }
-  }
-  for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.subs) {
-    if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.subs.hasOwnProperty(id) && !games.subs[id]) {
-      games.subs[id] = {
-        reducedCV: null
-      };
-    }
-  }
-  await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveGames(games);
+function formatCvDate(timestamp) {
+  if (!timestamp) return null;
+  return Object(date_fns_format__WEBPACK_IMPORTED_MODULE_8__["default"])(new Date(timestamp * 1000), 'MMM d, yyyy');
 }
-async function syncNoCvGames() {
-  const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get('https://esgst.rafaelgomes.xyz/api/games/ncv');
-  const games = response.json.result.found;
-  for (const id in games.apps) {
-    if (games.apps.hasOwnProperty(id)) {
-      games.apps[id].noCV = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.dateFromServer(games.apps[id].effective_date);
-      delete games.apps[id].effective_date;
+async function CvFromSG(syncer) {
+  if (syncer && syncer.sgCvGames) {
+    return syncer.sgCvGames;
+  }
+  let page = 1;
+  let hasMore = true;
+  const games = {
+    apps: {},
+    subs: {}
+  };
+  while (hasMore) {
+    if (syncer && syncer.canceled) {
+      break;
+    }
+    if (syncer && syncer.progressBar) {
+      syncer.progressBar.setMessage(`Syncing CV games from SteamGifts (page ${page})...`);
+    }
+    const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://www.steamgifts.com/bundle-games?page=${page}&format=json`);
+    const data = response.json || {};
+    const results = data.results || [];
+    for (const item of results) {
+      const type = item.app_id ? 'apps' : item.package_id ? 'subs' : null;
+      const id = item.app_id || item.package_id;
+      if (!type || !id) {
+        continue;
+      }
+      if (!games[type][id]) {
+        games[type][id] = {};
+      }
+      if (item.reduced_value_timestamp) {
+        games[type][id].reducedCV = formatCvDate(item.reduced_value_timestamp);
+      }
+      if (item.no_value_timestamp) {
+        games[type][id].noCV = formatCvDate(item.no_value_timestamp);
+      }
+    }
+    hasMore = results.length > 0 && results.length === data.per_page;
+    page += 1;
+  }
+  if (syncer) {
+    syncer.sgCvGames = games;
+  }
+  return games;
+}
+async function syncReducedCvGames(syncer) {
+  let games;
+  const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['server']]);
+  if (isPermitted) {
+    try {
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get('https://esgst.rafaelgomes.xyz/api/games/rcv');
+      games = response.json.result.found;
+      for (const type of ['apps', 'subs']) {
+        for (const id in games[type]) {
+          if (games[type].hasOwnProperty(id)) {
+            games[type][id].reducedCV = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.dateFromServer(games[type][id].effective_date);
+            delete games[type][id].effective_date;
+          }
+        }
+      }
+    } catch (err) {
+      _class_Logger__WEBPACK_IMPORTED_MODULE_15__["Logger"].warning(`Failed to sync reduced CV games from server (${err.message}). Falling back to SteamGifts...`);
     }
   }
-  for (const id in games.subs) {
-    if (games.subs.hasOwnProperty(id)) {
-      games.subs[id].noCV = _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.dateFromServer(games.subs[id].effective_date);
-      delete games.subs[id].effective_date;
+  if (!games) {
+    const sgGames = await CvFromSG(syncer);
+    games = {
+      apps: {},
+      subs: {}
+    };
+    for (const type of ['apps', 'subs']) {
+      for (const id in sgGames[type]) {
+        if (sgGames[type][id].reducedCV) {
+          games[type][id] = {
+            reducedCV: sgGames[type][id].reducedCV
+          };
+        }
+      }
     }
   }
-  for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.apps) {
-    if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.apps.hasOwnProperty(id) && !games.apps[id]) {
-      games.apps[id] = {
-        noCV: null
-      };
+  for (const type of ['apps', 'subs']) {
+    for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.games[type]) {
+      if (_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.games[type].hasOwnProperty(id) && !games[type][id]) {
+        games[type][id] = {
+          reducedCV: null
+        };
+      }
     }
   }
-  for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.subs) {
-    if (_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].esgst.games.subs.hasOwnProperty(id) && !games.subs[id]) {
-      games.subs[id] = {
-        noCV: null
-      };
+  await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveGames(games);
+}
+async function syncNoCvGames(syncer) {
+  let games;
+  const isPermitted = await _class_Permissions__WEBPACK_IMPORTED_MODULE_16__["permissions"].contains([['server']]);
+  if (isPermitted) {
+    try {
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get('https://esgst.rafaelgomes.xyz/api/games/ncv');
+      games = response.json.result.found;
+      for (const type of ['apps', 'subs']) {
+        for (const id in games[type]) {
+          if (games[type].hasOwnProperty(id)) {
+            games[type][id].noCV = _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.dateFromServer(games[type][id].effective_date);
+            delete games[type][id].effective_date;
+          }
+        }
+      }
+    } catch (err) {
+      _class_Logger__WEBPACK_IMPORTED_MODULE_15__["Logger"].warning(`Failed to sync no CV games from server (${err.message}). Falling back to SteamGifts...`);
     }
   }
-  await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveGames(games);
+  if (!games) {
+    const sgGames = await CvFromSG(syncer);
+    games = {
+      apps: {},
+      subs: {}
+    };
+    for (const type of ['apps', 'subs']) {
+      for (const id in sgGames[type]) {
+        if (sgGames[type][id].noCV) {
+          games[type][id] = {
+            noCV: sgGames[type][id].noCV
+          };
+        }
+      }
+    }
+  }
+  for (const type of ['apps', 'subs']) {
+    for (const id in _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.games[type]) {
+      if (_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].esgst.games[type].hasOwnProperty(id) && !games[type][id]) {
+        games[type][id] = {
+          noCV: null
+        };
+      }
+    }
+  }
+  await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveGames(games);
 }
 async function syncWhitelistBlacklist(key, syncer, url) {
   const name = key === 'whitelisted' ? 'Whitelist' : 'Blacklist';
-  let nextPage = _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(`lastPage${key}`) > 0 ? _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get(`lastPage${key}`) : 1;
+  let nextPage = _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(`lastPage${key}`) > 0 ? _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get(`lastPage${key}`) : 1;
   let pagination = null;
   do {
     const users = [];
     let elements, responseHtml;
     syncer.progressBar.setMessage(`Syncing your ${name.toLowerCase()} (page ${nextPage})...`);
-    responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`${url}${nextPage}`, {
+    responseHtml = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`${url}${nextPage}`, {
       queue: true
     })).html;
     elements = responseHtml.getElementsByClassName('table__row-outer-wrap');
@@ -33975,8 +34047,8 @@ async function syncWhitelistBlacklist(key, syncer, url) {
     }
     pagination = responseHtml.getElementsByClassName('pagination__navigation')[0];
     nextPage += 1;
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.saveUsers(users);
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setSetting(`lastPage${key}`, nextPage);
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.saveUsers(users);
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setSetting(`lastPage${key}`, nextPage);
   } while (!syncer.canceled && pagination && !pagination.lastElementChild.classList.contains('is-selected'));
 }
 async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFailed = false) {
@@ -33998,8 +34070,8 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
   const hasStoreGameData = getStoreIds('rgWishlist').length > 0 || getStoreIds('rgOwnedApps').length > 0 || getStoreIds('rgOwnedPackages').length > 0 || getStoreIds('rgIgnoredApps').length > 0 || getStoreIds('rgIgnoredPackages').length > 0;
   const hasStoreOwned = getStoreIds('rgOwnedApps').length > 0 || getStoreIds('rgOwnedPackages').length > 0;
   const hasApi = apiJson && apiJson.response && apiJson.response.games && apiJson.response.games.length;
-  if ((apiFailed || altAccount && !_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey') || !altAccount && _class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')) && !hasApi) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, altAccount ? _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+  if ((apiFailed || altAccount && !_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey') || !altAccount && _class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')) && !hasApi) {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, altAccount ? _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       className: "esgst-bold"
     }, `${altAccount.name}: `) : null, "Unable to sync through the Steam API. Check if you have a valid Steam API key set in the settings menu.", altAccount ? 'Also check the privacy settings of your alt account.' : null));
   }
@@ -34009,7 +34081,7 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
     syncer.jsx.push('Steam store sync returned no usable owned / wishlisted / ignored data. Check if you are logged in to the Steam store in this browser session and try again later.');
   }
   //Logger.info(hasApi, hasStore);
-  if ((!hasApi || !_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('fallbackSteamApi')) && !hasStore) {
+  if ((!hasApi || !_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('fallbackSteamApi')) && !hasStore) {
     return false;
   }
   if (!altAccount && !hasApi && !hasStoreGameData) {
@@ -34017,7 +34089,7 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
   }
 
   // delete old data
-  const savedGames = altAccount && altAccount.games || JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('games'));
+  const savedGames = altAccount && altAccount.games || JSON.parse(_class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('games'));
   const oldWishlisted = {
     apps: [],
     subs: []
@@ -34136,13 +34208,13 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
         }
       });
     }
-    if (numOwned !== _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.getValue('ownedGames', 0)) {
-      await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.setValue('ownedGames', numOwned);
+    if (numOwned !== _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.getValue('ownedGames', 0)) {
+      await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.setValue('ownedGames', numOwned);
     }
 
     // get the wishlisted dates
     try {
-      const wishlistData = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_11__["FetchRequest"].get(`https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('steamId')}&format=json`)).json.response.items;
+      const wishlistData = (await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_12__["FetchRequest"].get(`https://api.steampowered.com/IWishlistService/GetWishlist/v1/?key=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamApiKey')}&steamid=${_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('steamId')}&format=json`)).json.response.items;
       if (wishlistData) {
         wishlistData.forEach(item => {
           /**
@@ -34173,25 +34245,25 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
     addedWishlisted[type] = newWishlisted[type].filter(x => oldWishlisted[type].indexOf(x) < 0);
     removedIgnored[type] = oldIgnored[type].filter(x => newIgnored[type].indexOf(x) < 0);
     addedIgnored[type] = newIgnored[type].filter(x => oldIgnored[type].indexOf(x) < 0);
-    if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_s')) {
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_addOwned')) {
+    if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_s')) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_addOwned')) {
         for (const id of addedOwned[type]) {
           syncer.hgm.toAdd[type].add(id);
         }
         for (const id of removedOwned[type]) {
           syncer.hgm.toRemove[type].add(id);
         }
-      } else if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_removeOwned')) {
+      } else if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_removeOwned')) {
         for (const id of addedOwned[type]) {
           syncer.hgm.toRemove[type].add(id);
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_removeWishlisted')) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_removeWishlisted')) {
         for (const id of addedWishlisted[type]) {
           syncer.hgm.toRemove[type].add(id);
         }
       }
-      if (_class_Settings__WEBPACK_IMPORTED_MODULE_17__["Settings"].get('hgm_addIgnored')) {
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_18__["Settings"].get('hgm_addIgnored')) {
         for (const id of addedIgnored[type]) {
           syncer.hgm.toAdd[type].add(id);
         }
@@ -34209,48 +34281,48 @@ async function syncGames(altAccount, syncer, apiResponse, storeResponse, apiFail
     }
   }
   if (!altAccount) {
-    await _class_Shared__WEBPACK_IMPORTED_MODULE_18__["Shared"].common.lockAndSaveGames(savedGames);
+    await _class_Shared__WEBPACK_IMPORTED_MODULE_19__["Shared"].common.lockAndSaveGames(savedGames);
   }
   if (altAccount && (removedOwned.apps.length > 0 || removedOwned.subs.length > 0 || addedOwned.apps.length > 0 || addedOwned.subs.length > 0)) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", {
       className: "esgst-bold"
-    }, `Alt Account - ${altAccount.name}`), _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("br", null));
+    }, `Alt Account - ${altAccount.name}`), _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("br", null));
   }
   if (removedOwned.apps.length > 0) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       className: "esgst-bold"
     }, "Removed apps: "), removedOwned.apps.map((x, i) => {
-      x = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+      x = _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
         href: `http://store.steampowered.com/app/${x}`
       }, x);
       return i < removedOwned.apps.length - 1 ? [x, ', '] : [x];
     }).flat()));
   }
   if (removedOwned.subs.length > 0) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       className: "esgst-bold"
     }, "Removed packages: "), removedOwned.subs.map((x, i) => {
-      x = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+      x = _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
         href: `http://store.steampowered.com/sub/${x}`
       }, x);
       return i < removedOwned.subs.length - 1 ? [x, ', '] : [x];
     }).flat()));
   }
   if (addedOwned.apps.length > 0) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       className: "esgst-bold"
     }, "Added apps: "), addedOwned.apps.map((x, i) => {
-      x = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+      x = _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
         href: `http://store.steampowered.com/app/${x}`
       }, x);
       return i < addedOwned.apps.length - 1 ? [x, ', '] : [x];
     }).flat()));
   }
   if (addedOwned.subs.length > 0) {
-    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("span", {
+    syncer.jsx.push(_class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("div", null, _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("span", {
       className: "esgst-bold"
     }, "Added packages: "), addedOwned.subs.map((x, i) => {
-      x = _class_DOM__WEBPACK_IMPORTED_MODULE_10__["DOM"].element("a", {
+      x = _class_DOM__WEBPACK_IMPORTED_MODULE_11__["DOM"].element("a", {
         href: `http://store.steampowered.com/sub/${x}`
       }, x);
       return i < addedOwned.subs.length - 1 ? [x, ', '] : [x];
@@ -35173,8 +35245,8 @@ function loadDataManagement(type, isPopup, callback) {
       key: 'games_gt',
       name: 'Game Tags'
     }, {
-      key: 'games_itadi',
-      name: 'IsThereAnyDeal Info'
+      key: 'games_ggdi',
+      name: 'GG.deals Info'
     }]
   }, {
     check: true,
@@ -35739,8 +35811,8 @@ function loadDataCleaner(isPopup) {
           key: 'games_gt',
           name: 'Game Tags'
         }, {
-          key: 'games_itadi',
-          name: 'IsThereAnyDeal Info'
+          key: 'games_ggdi',
+          name: 'GG.deals Info'
         }]
       }, {
         check: true,
@@ -36356,7 +36428,7 @@ async function manageData(dm, storageType, space, callback) {
           main: ['apps', 'packages', 'reducedCV', 'noCV', 'hidden', 'ignored', 'owned', 'wishlisted', 'followed', 'sgId'],
           gt: ['tags'],
           egh: ['entered'],
-          itadi: ['itadi']
+          ggdi: ['ggDeals']
         };
         data.games = {
           apps: {},
@@ -36366,7 +36438,7 @@ async function manageData(dm, storageType, space, callback) {
         sizes = {
           egh: 0,
           gt: 0,
-          itadi: 0,
+          ggdi: 0,
           main: 0,
           total: 0
         };
@@ -36511,13 +36583,13 @@ async function manageData(dm, storageType, space, callback) {
                               case 'entered':
                                 mergedDataValue.entered = true;
                                 break;
-                              case 'itadi':
-                                if (mergedDataValue.itadi) {
-                                  if (newDataValue.itadi.lastCheck > mergedDataValue.itadi.lastCheck) {
-                                    mergedDataValue.itadi = newDataValue.itadi;
+                              case 'ggDeals':
+                                if (mergedDataValue.ggDeals) {
+                                  if (newDataValue.ggDeals.lastCheck > mergedDataValue.ggDeals.lastCheck) {
+                                    mergedDataValue.ggDeals = newDataValue.ggDeals;
                                   }
                                 } else {
-                                  mergedDataValue.itadi = newDataValue.itadi;
+                                  mergedDataValue.ggDeals = newDataValue.ggDeals;
                                 }
                                 break;
                               case 'tags':
@@ -36563,13 +36635,13 @@ async function manageData(dm, storageType, space, callback) {
                               case 'entered':
                                 mergedDataValue.entered = true;
                                 break;
-                              case 'itadi':
-                                if (mergedDataValue.itadi) {
-                                  if (newDataValue.itadi.lastCheck > mergedDataValue.itadi.lastCheck) {
-                                    mergedDataValue.itadi = newDataValue.itadi;
+                              case 'ggDeals':
+                                if (mergedDataValue.ggDeals) {
+                                  if (newDataValue.ggDeals.lastCheck > mergedDataValue.ggDeals.lastCheck) {
+                                    mergedDataValue.ggDeals = newDataValue.ggDeals;
                                   }
                                 } else {
-                                  mergedDataValue.itadi = newDataValue.itadi;
+                                  mergedDataValue.ggDeals = newDataValue.ggDeals;
                                 }
                                 break;
                               case 'tags':
@@ -37212,7 +37284,7 @@ __webpack_require__.r(__webpack_exports__);
 
 class PersistentStorage {
   constructor() {
-    this.currentVersion = 18;
+    this.currentVersion = 19;
     this.defaultValues = {
       decryptedGiveaways: '{}',
       delistedGames: '{ "banned": [], "removed": [] }',
@@ -37931,6 +38003,27 @@ class PersistentStorage {
       if (settingsChanged) {
         toSet.settings = JSON.stringify(settings);
         storage.settings = toSet.settings;
+      }
+    }
+    if (version < 19) {
+      window.console.log('Upgrading storage to version 19...');
+      const games = JSON.parse(storage.games || this.defaultValues.games);
+      let gamesChanged = false;
+      for (const gameType of ['apps', 'subs']) {
+        for (const game of Object.values(games[gameType] || {})) {
+          if (!game.itadi) {
+            continue;
+          }
+          if (game.itadi.version === 3 && !game.ggDeals) {
+            game.ggDeals = game.itadi;
+          }
+          delete game.itadi;
+          gamesChanged = true;
+        }
+      }
+      if (gamesChanged) {
+        toSet.games = JSON.stringify(games);
+        storage.games = toSet.games;
       }
     }
     for (const key of Object.keys(toSet)) {
@@ -39160,7 +39253,7 @@ class GeneralCustomHeaderFooterLinks extends _class_Module__WEBPACK_IMPORTED_MOD
   constructor() {
     super();
     this.info = {
-      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Allows you to add custom links to the header dropdowns/footer of any page."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Already comes with some predefined links:"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Giveaways: Hidden Games, Reduced CV Games, Browse Wishlist, Browse Recommended, Browse Group, Browse New"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Discussions: Categorize Discussions, Browse Announcements, Browse Bugs / Suggestions, Browse Deals, Browse General, Browse Group Recruitment, Browse Let's Play Together, Browse Off-Topic, Browse Puzzles, Browse Uncategorized"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Support: Real CV, Not Activated Wins, Multiple Wins"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Help: Change Log"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Account: Whitelist, Blacklist, Games, Groups, Wishlist")), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "If you press the Ctrl key with a dropdown open, the feature adds two buttons (\"", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("i", {
+      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Allows you to add custom links to the header dropdowns/footer of any page."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Already comes with some predefined links:"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Giveaways: Hidden Games, Reduced CV Games, Browse Wishlist, Browse Recommended, Browse Group, Browse New"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Discussions: Categorize Discussions, Browse Announcements, Browse Bugs / Suggestions, Browse Deals, Browse General, Browse Group Recruitment, Browse Let's Play Together, Browse Off-Topic, Browse Puzzles, Browse Uncategorized"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Support: Real CV, Not Activated Wins, Multiple Wins"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Help: Change Log"), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "Account: Whitelist, Blacklist, Games, Groups, Wishlist")), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "Shortcut Key Configuration:"), " You can set a single key (e.g., ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "tab"), ") or a modifier combination using ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "Ctrl"), ", ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "Shift"), ", or ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "Alt"), "(e.g., ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("strong", null, "ctrlKey + e"), ", which is the default)."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "If you press the shortcut key with a dropdown open, the feature adds two buttons (\"", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("i", {
         className: "fa fa-plus-circle"
       }), " Add Custom Link\" and \"", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("i", {
         className: "fa fa-undo"
@@ -39168,7 +39261,7 @@ class GeneralCustomHeaderFooterLinks extends _class_Module__WEBPACK_IMPORTED_MOD
         className: "fa fa-edit"
       }), " to edit and ", _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("i", {
         className: "fa fa-trash"
-      }), " to remove) to each custom link in the dropdown that allow you to edit/remove the custom link."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "If you press the Ctrl key with no dropdown open, those same buttons will be added to the footer of the page."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "You can move the custom links by dragging and dropping them.")),
+      }), " to remove) to each custom link in the dropdown that allow you to edit/remove the custom link."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "If you press the shortcut key with no dropdown open, those same buttons will be added to the footer of the page."), _class_DOM__WEBPACK_IMPORTED_MODULE_5__["DOM"].element("li", null, "You can move the custom links by dragging and dropping them.")),
       inputItems: 'chfl_key',
       id: 'chfl',
       name: 'Custom Header/Footer Links',
@@ -49840,7 +49933,7 @@ class GiveawaysCustomGiveawayBackground extends _class_Module__WEBPACK_IMPORTED_
   constructor() {
     super();
     this.info = {
-      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Allows you to color the background of giveaways based on their type (public, invite only, region restricted, group or whitelist) and level.")),
+      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Allows you to color the background of giveaways based on their type (public, invite only, region restricted, group, whitelist or wishlist) and level.")),
       features: {
         cgb_gv: {
           description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Shows a colored border on top of the giveaway in Grid View")),
@@ -49888,6 +49981,11 @@ class GiveawaysCustomGiveawayBackground extends _class_Module__WEBPACK_IMPORTED_
         cgb_sgt: {
           background: true,
           name: 'Color SGTools giveaways.',
+          sg: true
+        },
+        cgb_wl: {
+          background: true,
+          name: 'Color wishlisted giveaways.',
           sg: true
         }
       },
@@ -49940,6 +50038,9 @@ class GiveawaysCustomGiveawayBackground extends _class_Module__WEBPACK_IMPORTED_
       }
       if (_class_Settings__WEBPACK_IMPORTED_MODULE_3__["Settings"].get('cgb_p') && giveaway.public) {
         matchedColors.push(_class_Settings__WEBPACK_IMPORTED_MODULE_3__["Settings"].get('cgb_p_bgColor'));
+      }
+      if (_class_Settings__WEBPACK_IMPORTED_MODULE_3__["Settings"].get('cgb_wl') && giveaway.wishlisted) {
+        matchedColors.push(_class_Settings__WEBPACK_IMPORTED_MODULE_3__["Settings"].get('cgb_wl_bgColor'));
       }
       if (matchedColors.length >= 2) {
         const count = matchedColors.length;
@@ -78938,20 +79039,19 @@ const giveawaysEnterLeaveGiveawayButton = new GiveawaysEnterLeaveGiveawayButton(
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "giveawaysIsThereAnyDealInfo", function() { return giveawaysIsThereAnyDealInfo; });
-/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(5);
-/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(89);
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(98);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(107);
-/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(208);
-/* harmony import */ var _class_FetchRequest__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(210);
-/* harmony import */ var _class_Lock__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(211);
-/* harmony import */ var _class_Module__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(222);
-/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(223);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "giveawaysGGDealsInfo", function() { return giveawaysGGDealsInfo; });
+/* harmony import */ var core_js_modules_es_array_includes_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(169);
+/* harmony import */ var core_js_modules_es_array_includes_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_includes_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(5);
+/* harmony import */ var core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_iterator_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(107);
+/* harmony import */ var core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_iterator_js__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _class_DOM__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(208);
+/* harmony import */ var _class_FetchRequest__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(210);
+/* harmony import */ var _class_Lock__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(211);
+/* harmony import */ var _class_Module__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(222);
+/* harmony import */ var _class_Permissions__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(223);
+/* harmony import */ var _class_Settings__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(146);
 /* harmony import */ var _Common__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(167);
 
 
@@ -78966,48 +79066,86 @@ __webpack_require__.r(__webpack_exports__);
 const createElements = _Common__WEBPACK_IMPORTED_MODULE_9__["common"].createElements.bind(_Common__WEBPACK_IMPORTED_MODULE_9__["common"]),
   getValue = _Common__WEBPACK_IMPORTED_MODULE_9__["common"].getValue.bind(_Common__WEBPACK_IMPORTED_MODULE_9__["common"]),
   setValue = _Common__WEBPACK_IMPORTED_MODULE_9__["common"].setValue.bind(_Common__WEBPACK_IMPORTED_MODULE_9__["common"]);
-class GiveawaysIsThereAnyDealInfo extends _class_Module__WEBPACK_IMPORTED_MODULE_7__["Module"] {
+const regions = [['au', 'Australia'], ['be', 'Belgium'], ['br', 'Brazil'], ['ca', 'Canada'], ['ch', 'Switzerland'], ['de', 'Germany'], ['dk', 'Denmark'], ['es', 'Spain'], ['eu', 'Europe'], ['fi', 'Finland'], ['fr', 'France'], ['gb', 'United Kingdom'], ['ie', 'Ireland'], ['it', 'Italy'], ['nl', 'Netherlands'], ['no', 'Norway'], ['pl', 'Poland'], ['se', 'Sweden'], ['us', 'United States']];
+class GiveawaysGGDealsInfo extends _class_Module__WEBPACK_IMPORTED_MODULE_6__["Module"] {
   constructor() {
     super();
     this.info = {
-      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Adds a box to the sidebar of any", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("a", {
+      description: () => _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("ul", null, _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("li", null, "Adds to the sidebar of any", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("a", {
         href: "https://www.steamgifts.com/giveaway/aeqw7/"
-      }, "giveaway"), " page that shows the best current deal for the game, the historical lowest price of the game and a list with all of the bundles that the game has been in. All of this information is retrieved from", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("a", {
-        href: "https://isthereanydeal.com"
-      }, "IsThereAnyDeal"), "."), _class_DOM__WEBPACK_IMPORTED_MODULE_4__["DOM"].element("li", null, "Results are cached for 24 hours, so if you access a giveaway for the same game again within that timeframe, the information will not change.")),
-      id: 'itadi',
-      name: 'IsThereAnyDeal Info',
+      }, "giveaway"), " or", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("a", {
+        href: "https://www.steamgifts.com/game/4qdt1/dead-space-2008"
+      }, "game"), " page that shows the current and historical lowest prices for the game. This information is retrieved from", ' ', _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("a", {
+        href: "https://gg.deals"
+      }, "GG.deals"), "."), _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("li", null, "Results are cached for 24 hours."), _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("li", null, "A GG.deals API key is required, ", _class_DOM__WEBPACK_IMPORTED_MODULE_3__["DOM"].element("a", {
+        href: "https://gg.deals/api/"
+      }, "Get a key"), ".")),
+      id: 'ggdi',
+      options: [{
+        title: 'Show keyshop prices:',
+        values: ['Disabled', 'Enabled']
+      }, {
+        title: 'Price region:',
+        values: regions.map(([code, name]) => `${name} (${code.toUpperCase()})`)
+      }],
+      inputItems: [{
+        id: 'ggDealsApiKey',
+        prefix: 'API Key: '
+      }],
+      name: 'GG.deals Info',
       sg: true,
       type: 'giveaways'
     };
   }
   async init() {
-    if (!this.esgst.giveawayPath) {
+    if (!(this.esgst.giveawayPath || this.esgst.gamePath) || !_class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('ggdi_sg') || !_class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('ggDealsApiKey') || !(await _class_Permissions__WEBPACK_IMPORTED_MODULE_7__["permissions"].contains([['ggDeals']]))) {
       return;
     }
-    if (!(await _class_Permissions__WEBPACK_IMPORTED_MODULE_8__["permissions"].contains([['isThereAnyDeal']]))) {
-      return;
+    this.esgst.giveawayFeatures.push(this.ggdi_getGiveaways.bind(this));
+    if (this.esgst.gamePath) {
+      this.esgst.gameFeatures.push(this.ggdi_getGames.bind(this));
     }
-    this.esgst.giveawayFeatures.push(this.itadi_getGiveaways.bind(this));
   }
-  itadi_getGiveaways(giveaways, main) {
-    if (!main) {
+  ggdi_getGames(games, main) {
+    var _games$all;
+    if (!this.esgst.gamePath || !main) return;
+    const game = (_games$all = games.all) === null || _games$all === void 0 ? void 0 : _games$all.find(item => item.id && ['apps', 'subs'].includes(item.type));
+    if (!game) {
+      return;
+    }
+    this.ggdi_getInfo(Date.now(), game);
+  }
+  ggdi_getGiveaways(giveaways, main) {
+    if (!this.esgst.giveawayPath || !main) {
       return;
     }
     const currentTime = Date.now();
     for (const giveaway of giveaways) {
+      if (!(giveaway !== null && giveaway !== void 0 && giveaway.id) || !['apps', 'subs'].includes(giveaway.type)) {
+        continue;
+      }
       // noinspection JSIgnoredPromiseFromCall
-      this.itadi_getInfo(currentTime, giveaway);
+      this.ggdi_getInfo(currentTime, giveaway);
     }
   }
-  async itadi_getInfo(currentTime, giveaway) {
-    const game = this.esgst.games[giveaway.type][giveaway.id];
-    let itadi = null;
-    const plain = this.itadi_getPlain(giveaway.name);
-    if (game && game.itadi && game.itadi.version === 2 && currentTime - game.itadi.lastCheck < 86400000) {
-      itadi = game.itadi;
+  async ggdi_getInfo(currentTime, giveaway) {
+    var _this$esgst$games, _Settings$get;
+    if (!(giveaway !== null && giveaway !== void 0 && giveaway.id) || !['apps', 'subs'].includes(giveaway.type)) {
+      return;
+    }
+    const game = (_this$esgst$games = this.esgst.games) === null || _this$esgst$games === void 0 || (_this$esgst$games = _this$esgst$games[giveaway.type]) === null || _this$esgst$games === void 0 ? void 0 : _this$esgst$games[giveaway.id];
+    const region = regions[(_Settings$get = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('ggdi_index_1')) !== null && _Settings$get !== void 0 ? _Settings$get : 18][0];
+    const gameType = giveaway.type.slice(0, -1);
+    let prices = null;
+    if (game && game.ggDeals && game.ggDeals.version === 3 && game.ggDeals.gameType === gameType && game.ggDeals.region === region && currentTime - game.ggDeals.lastCheck < 86400000) {
+      prices = game.ggDeals;
     } else {
-      const loading = createElements(this.esgst.sidebar, 'beforeend', [{
+      const sidebar = this.esgst.sidebar;
+      if (!sidebar) {
+        return;
+      }
+      const adotsHeading = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('adots') && _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('adots_index') === 1 ? sidebar.querySelector('.esgst-adots-heading') : null;
+      const loading = createElements(adotsHeading || sidebar, adotsHeading ? 'beforebegin' : 'beforeend', [{
         attributes: {
           class: 'sidebar__heading'
         },
@@ -79018,79 +79156,75 @@ class GiveawaysIsThereAnyDealInfo extends _class_Module__WEBPACK_IMPORTED_MODULE
           },
           type: 'i'
         }, {
-          text: ' Loading IsThereAnyDeal info...',
+          text: ' Loading GG.deals info...',
           type: 'node'
         }]
       }]);
-      itadi = await this.itadi_loadInfo(giveaway, plain);
+      prices = await this.ggdi_loadInfo(giveaway, region, gameType);
       loading.remove();
     }
-    this.itadi_addInfo(itadi, plain);
+    this.ggdi_addInfo(prices);
   }
-  async itadi_loadInfo(giveaway, plain) {
-    const itadi = {
-      bundles: [],
-      current: null,
-      historical: null,
-      lastCheck: Date.now(),
-      version: 2
+  async ggdi_loadInfo(giveaway, region, gameType) {
+    var _giveaway$type, _games$_giveaway$type;
+    const endpointTypes = {
+      app: 'app',
+      sub: 'sub'
     };
-    const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_5__["FetchRequest"].get(`https://isthereanydeal.com/game/${plain}/info/`, {
-      queue: true
-    });
-    const deals = response.html.querySelectorAll('#gh-po tr');
-    for (const deal of deals) {
-      const match = deal.firstElementChild.textContent.trim().match(/(Current\sBest|Historical\sLow)/);
-      if (!match) {
-        continue;
-      }
-      itadi[match[1] === 'Current Best' ? 'current' : 'historical'] = {
-        cut: deal.querySelector('.gh-po__cut').textContent.trim(),
-        date: deal.querySelector('.date').textContent.trim(),
-        price: deal.querySelector('.gh-po__price').textContent.trim(),
-        source: deal.querySelector('.gh-po__shopTitle').textContent.trim()
-      };
+    const apiType = endpointTypes[gameType];
+    const prices = {
+      currentRetail: null,
+      currentKeyshops: null,
+      historicalRetail: null,
+      historicalKeyshops: null,
+      currency: null,
+      lastCheck: Date.now(),
+      gameType,
+      region,
+      url: `https://store.steampowered.com/${gameType}/${giveaway.id}/`,
+      version: 3
+    };
+    if (!apiType) {
+      return prices;
     }
-    const bundles = response.html.querySelectorAll(`.bundleTable tr:not(:first-child)`);
-    for (const bundle of bundles) {
-      const link = bundle.querySelector('.t-st3--link');
-      itadi.bundles.push({
-        expiry: bundle.querySelector('.bundleTable__expiry').textContent.trim(),
-        id: link.getAttribute('href').match(/id\/(.+)/)[1],
-        name: link.textContent.trim(),
-        price: bundle.querySelector('.t-st3__price').textContent.trim(),
-        source: bundle.querySelector('.shopTitle').textContent.trim()
+    try {
+      var _response$json;
+      const url = `https://api.gg.deals/v1/prices/by-steam-${apiType}-id/?ids=${encodeURIComponent(giveaway.id)}&key=${encodeURIComponent(_class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('ggDealsApiKey'))}&region=${encodeURIComponent(region)}`;
+      const response = await _class_FetchRequest__WEBPACK_IMPORTED_MODULE_4__["FetchRequest"].get(url, {
+        queue: true
       });
+      const result = response.json && response.json.data && response.json.data[giveaway.id];
+      if ((_response$json = response.json) !== null && _response$json !== void 0 && _response$json.success && result !== null && result !== void 0 && result.prices) {
+        Object.assign(prices, result.prices);
+        prices.url = result.url;
+      }
+    } catch (error) {
+      console.error('[GG.deals Info] Price request failed.', error);
     }
-    const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_6__["Lock"]('game', {
+    const lock = new _class_Lock__WEBPACK_IMPORTED_MODULE_5__["Lock"]('game', {
       threshold: 300
     });
     await lock.lock();
     const games = JSON.parse(getValue('games'));
+    (_games$_giveaway$type = games[_giveaway$type = giveaway.type]) !== null && _games$_giveaway$type !== void 0 ? _games$_giveaway$type : games[_giveaway$type] = {};
     if (!games[giveaway.type][giveaway.id]) {
       games[giveaway.type][giveaway.id] = {};
     }
-    games[giveaway.type][giveaway.id].itadi = itadi;
+    games[giveaway.type][giveaway.id].ggDeals = prices;
     await setValue('games', JSON.stringify(games));
     await lock.unlock();
-    return itadi;
+    return prices;
   }
-  itadi_template(text) {
-    return [{
+  ggdi_sectionHeaderTemplate(text) {
+    return {
       attributes: {
         class: 'sidebar__heading'
       },
       text,
-      type: 'h3'
-    }, {
-      attributes: {
-        class: 'sidebar__navigation'
-      },
-      type: 'ul',
-      children: []
-    }];
+      type: 'li'
+    };
   }
-  itadi_itemTemplate(text1, text2, url) {
+  ggdi_itemTemplate(text1, text2, url) {
     return {
       attributes: {
         class: 'sidebar__navigation__item'
@@ -79123,40 +79257,71 @@ class GiveawaysIsThereAnyDealInfo extends _class_Module__WEBPACK_IMPORTED_MODULE
       }]
     };
   }
-  itadi_noItemTemplate(text) {
+  ggdi_noItemTemplate(text) {
     return {
+      attributes: {
+        class: 'sidebar__navigation__item'
+      },
       text,
-      type: 'node'
+      type: 'li'
     };
   }
-  itadi_addInfo(itadi, plain) {
-    const items = [...this.itadi_template('Best Current Deal'), ...this.itadi_template('Historical Lowest Price'), ...this.itadi_template('Bundles')];
-    if (itadi.current) {
-      items[1].children.push(this.itadi_itemTemplate(`${itadi.current.source} (${itadi.current.date})`, `${itadi.current.price} (${itadi.current.cut})`, `https://isthereanydeal.com/game/${plain}/info/`));
+  ggdi_addInfo(prices) {
+    const showKeyshops = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('ggdi_index_0') === 1;
+    const navChildren = [];
+    const items = [{
+      attributes: {
+        class: 'sidebar__heading esgst-ggdeals'
+      },
+      text: 'GG.Deals',
+      type: 'h3'
+    }, {
+      attributes: {
+        class: 'sidebar__navigation esgst-ggdeals-prices'
+      },
+      type: 'ul',
+      children: navChildren
+    }];
+    const url = prices.url || 'https://gg.deals/';
+    navChildren.push(this.ggdi_sectionHeaderTemplate('Current Prices'));
+    if (prices.currentRetail) {
+      navChildren.push(this.ggdi_itemTemplate('Lowest Retail Price', `${prices.currentRetail} ${prices.currency || ''}`.trim(), url));
     } else {
-      items[1].children.push(this.itadi_noItemTemplate('There are no current deals for this game.'));
+      navChildren.push(this.ggdi_noItemTemplate('There is no current retail price for this game.'));
     }
-    if (itadi.historical) {
-      items[3].children.push(this.itadi_itemTemplate(`${itadi.historical.source} (${itadi.historical.date})`, `${itadi.historical.price} (${itadi.historical.cut})`, `https://isthereanydeal.com/game/${plain}/info/`));
-    } else {
-      items[3].children.push(this.itadi_noItemTemplate('There is no price history for this game.'));
-    }
-    if (itadi.bundles && itadi.bundles.length) {
-      for (const bundle of itadi.bundles) {
-        items[5].children.push(this.itadi_itemTemplate(`${bundle.name} (${bundle.source})`, `${bundle.price} (${bundle.expiry})`, `https://isthereanydeal.com/specials/#/filter:id/${bundle.id}`));
+    if (showKeyshops) {
+      if (prices.currentKeyshops) {
+        navChildren.push(this.ggdi_itemTemplate('Lowest Keyshop Price', `${prices.currentKeyshops} ${prices.currency || ''}`.trim(), url));
+      } else {
+        navChildren.push(this.ggdi_noItemTemplate('There is no current keyshop price for this game.'));
       }
-    } else {
-      items[5].children.push(this.itadi_noItemTemplate('This game has never been in a bundle.'));
     }
-    createElements(this.esgst.sidebar, 'beforeend', items);
-  }
-  itadi_getPlain(name) {
-    return name.toLowerCase().replace(/\sthe|the\s/g, '').replace(/\s/g, '').replace(/\d/g, m => {
-      return ['0', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix'][m];
-    }).replace(/&/g, 'and').replace(/\+/g, 'plus').replace(/[^\d\w]/g, '');
+    navChildren.push(this.ggdi_sectionHeaderTemplate('Historical Lowest Prices'));
+    if (prices.historicalRetail) {
+      navChildren.push(this.ggdi_itemTemplate('Historical Lowest Retail Price', `${prices.historicalRetail} ${prices.currency || ''}`.trim(), url));
+    } else {
+      navChildren.push(this.ggdi_noItemTemplate('There is no historical retail price for this game.'));
+    }
+    if (showKeyshops) {
+      if (prices.historicalKeyshops) {
+        navChildren.push(this.ggdi_itemTemplate('Historical Lowest Keyshop Price', `${prices.historicalKeyshops} ${prices.currency || ''}`.trim(), url));
+      } else {
+        navChildren.push(this.ggdi_noItemTemplate('There is no historical keyshop price for this game.'));
+      }
+    }
+    const sidebar = this.esgst.sidebar;
+    if (!sidebar) {
+      return;
+    }
+    const adotsHeading = _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('adots') && _class_Settings__WEBPACK_IMPORTED_MODULE_8__["Settings"].get('adots_index') === 1 ? sidebar.querySelector('.esgst-adots-heading') : null;
+    createElements(adotsHeading || sidebar, adotsHeading ? 'beforebegin' : 'beforeend', items);
+    const fanaticalContainer = document.querySelector('.sidebar .fanatical_container');
+    if (fanaticalContainer) {
+      sidebar.appendChild(fanaticalContainer.parentElement);
+    }
   }
 }
-const giveawaysIsThereAnyDealInfo = new GiveawaysIsThereAnyDealInfo();
+const giveawaysGGDealsInfo = new GiveawaysGGDealsInfo();
 
 
 /***/ }),
